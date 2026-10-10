@@ -50,7 +50,6 @@ cp .env.example .env
 Configure your `.env` file:
 ```env
 DATABASE_URL="your-postgresql-connection-string"
-GEMINI_API_KEY="your-gemini-api-key"
 VITE_SUPABASE_URL="your-supabase-url"
 VITE_SUPABASE_ANON_KEY="your-supabase-anon-key"
 ```
