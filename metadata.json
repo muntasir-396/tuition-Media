@@ -1,0 +1,6 @@
+{
+  "name": "TutorLink",
+  "description": "Country's #1 Tutor Matching & Learning Platform in Bangladesh. Search tuition jobs, connect with verified tutors, view tutor profiles, and apply for tuitions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
