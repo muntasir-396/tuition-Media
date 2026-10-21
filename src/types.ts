@@ -66,6 +66,7 @@ export interface TuitionJob {
 
 export interface TutorProfile {
   id: string;
+  tutorCode?: string;
   name: string;
   avatar: string;
   rating: number;
@@ -74,20 +75,29 @@ export interface TutorProfile {
   exclusive: boolean;
   university: string;
   department: string;
+  studentId?: string;
+  academicYear?: string;
   location: string;
   city: string;
-  gender: 'Male' | 'Female';
+  district?: string;
+  area?: string;
+  gender: 'Male' | 'Female' | string;
   experienceYears: number;
+  tutoringExperience?: number;
   expectedSalary: string;
+  expectedSalaryMin?: number;
+  expectedSalaryMax?: number;
   subjects: string[];
   mediums: string[];
+  classes?: string[];
   completion: number;
+  status: 'active' | 'blocked' | 'suspended';
   phone: string;
   email: string;
   dob: string;
   bloodGroup: string;
   religion: string;
-  nidStatus: 'Verified (NID Provided)' | 'Pending Verification';
+  nidStatus: 'Verified (NID Provided)' | 'Pending Verification' | string;
   presentAddress: string;
   permanentAddress: string;
   guardianInfo: {
@@ -102,6 +112,7 @@ export interface TutorProfile {
     methods: string[];
     timeSlots: string;
     preferredAreas: string[];
+    availableDays?: string[];
   };
   educationHistory: Array<{
     degree: string;
@@ -124,4 +135,17 @@ export interface ServiceCategory {
 export interface CityMetric {
   name: string;
   tutorCount: number;
+}
+
+export interface TeacherApplicationAlert {
+  id: string;
+  jobId: string;
+  jobTitle: string;
+  tutorId: string;
+  tutorName: string;
+  tutorUniversity: string;
+  tutorDepartment?: string;
+  expectedSalary?: number | null;
+  timestamp: string;
+  isRead: boolean;
 }

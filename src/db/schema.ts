@@ -29,6 +29,7 @@ export const tutors = pgTable('tutors', {
   guardianInfo: jsonb('guardian_info'),
   tutoringInfo: jsonb('tutoring_info'),
   educationHistory: jsonb('education_history'),
+  status: text('status').default('active'),
 });
 
 export const tuitions = pgTable('tuitions', {
@@ -170,6 +171,12 @@ export const tutorProfiles = pgTable('tutor_profiles', {
   verificationStatus: text('verification_status').default('pending'),
   verificationDate: timestamp('verification_date'),
   nidStatus: text('nid_status'),
+  bloodGroup: text('blood_group'),
+  religion: text('religion'),
+  guardianInfo: jsonb('guardian_info'),
+  educationHistory: jsonb('education_history'),
+  preferredAreas: jsonb('preferred_areas'),
+  status: text('status').default('active'),
   nidDocumentUrl: text('nid_document_url'),
   cvUrl: text('cv_url'),
   profilePhotoUrl: text('profile_photo_url'),

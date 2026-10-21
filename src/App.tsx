@@ -30,7 +30,7 @@ import { CreditCard, Phone, Sparkles, ShieldCheck, HelpCircle } from 'lucide-rea
 
 const MainContent: React.FC = () => {
   
-  const { activeTab, setActiveTab, isLoggedIn, userRole, authLoading } = useApp();
+  const { activeTab, setActiveTab, isLoggedIn, userRole, authLoading, selectedTutor, currentUser } = useApp();
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
@@ -56,39 +56,44 @@ const MainContent: React.FC = () => {
   }
 
   if (isTutorTab) {
-     if (!isLoggedIn) {
-         // Not logged in -> Redirect to login via a nice message & button
-         return (
-            <div className="flex flex-col items-center justify-center py-20 px-4 space-y-6">
-              <h2 className="text-2xl font-black text-slate-800">Authentication Required</h2>
-              <p className="text-slate-500 text-sm">Please sign in to access your tutor profile and applications.</p>
-              <button 
-                onClick={() => {
-                  setActiveTab('login');
-                }}
-                className="px-6 py-3 bg-[#84CC16] text-white font-bold rounded-xl shadow-sm hover:bg-[#65A30D]"
-              >
-                 Sign In / Register
-              </button>
-            </div>
-         );
-     }
-     if (userRole !== 'tutor') {
-         return (
-            <div className="flex flex-col items-center justify-center py-20 px-4 space-y-6">
-              <h2 className="text-2xl font-black text-slate-800">Access Denied</h2>
-              <p className="text-slate-500 text-sm">This page is available only to Tutor accounts.</p>
-              <button 
-                onClick={() => {
-                  const target = userRole === 'parent' ? 'guardian-dashboard' : 'home';
-                  setActiveTab(target as import('./types').PageTab);
-                }}
-                className="px-6 py-3 border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50"
-              >
-                 Go to Dashboard
-              </button>
-            </div>
-         );
+     const isViewingSpecificTutor = !!selectedTutor;
+     const isAdmin = userRole === 'admin' || userRole === 'super-admin' || currentUser?.role === 'admin' || currentUser?.role === 'super-admin';
+
+     // If viewing an inspected tutor's profile or if the user is an admin, allow full access
+     if (!isViewingSpecificTutor && !isAdmin) {
+       if (!isLoggedIn) {
+           return (
+              <div className="flex flex-col items-center justify-center py-20 px-4 space-y-6">
+                <h2 className="text-2xl font-black text-slate-800">Authentication Required</h2>
+                <p className="text-slate-500 text-sm">Please sign in to access your tutor profile and applications.</p>
+                <button 
+                  onClick={() => {
+                    setActiveTab('login');
+                  }}
+                  className="px-6 py-3 bg-[#84CC16] text-white font-bold rounded-xl shadow-sm hover:bg-[#65A30D]"
+                >
+                   Sign In / Register
+                </button>
+              </div>
+           );
+       }
+       if (userRole !== 'tutor') {
+           return (
+              <div className="flex flex-col items-center justify-center py-20 px-4 space-y-6">
+                <h2 className="text-2xl font-black text-slate-800">Access Denied</h2>
+                <p className="text-slate-500 text-sm">This page is available only to Tutor accounts.</p>
+                <button 
+                  onClick={() => {
+                    const target = userRole === 'parent' ? 'guardian-dashboard' : 'home';
+                    setActiveTab(target as import('./types').PageTab);
+                  }}
+                  className="px-6 py-3 border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50"
+                >
+                   Go to Dashboard
+                </button>
+              </div>
+           );
+       }
      }
   }
 

@@ -18,6 +18,10 @@ import {
   ShieldCheck,
   Star,
   Globe,
+  Wallet,
+  Calendar,
+  Users2,
+  Menu as MenuIcon,
 } from 'lucide-react';
 
 export const HomeView: React.FC = () => {
@@ -27,9 +31,45 @@ export const HomeView: React.FC = () => {
     setSelectedMediumFilter,
     navigateToJobDetails,
     navigateToTutorProfile,
+    applicantCountOverrides,
   } = useApp();
 
   const [searchInput, setSearchInput] = React.useState('');
+  const [featuredJobs, setFeaturedJobs] = React.useState<any[]>([]);
+
+  const fetchFeaturedJobs = async () => {
+    try {
+      const res = await fetch('/api/tuitions');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setFeaturedJobs(data.slice(0, 4));
+        }
+      }
+    } catch (e) {}
+  };
+
+  React.useEffect(() => {
+    fetchFeaturedJobs();
+
+    const handleApplied = (e: any) => {
+      const appliedJobId = e?.detail?.jobId;
+      if (appliedJobId) {
+        setFeaturedJobs((prev) =>
+          prev.map((j) =>
+            j.id === appliedJobId || j.jobCode === appliedJobId
+              ? { ...j, applications: (j.applications || 0) + 1 }
+              : j
+          )
+        );
+      } else {
+        fetchFeaturedJobs();
+      }
+    };
+
+    window.addEventListener('tutorlink:job-applied', handleApplied);
+    return () => window.removeEventListener('tutorlink:job-applied', handleApplied);
+  }, []);
 
   const handleHeroSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -251,6 +291,112 @@ export const HomeView: React.FC = () => {
           ))}
         </div>
       </section>
+
+      {/* 5. Live Tuition Jobs Showcase */}
+      {featuredJobs.length > 0 && (
+        <section className="space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold mb-1">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                </span>
+                <span>Live Tuition Openings</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+                Featured Tuition Jobs
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 font-medium">
+                Apply now to connect directly with guardians. Applicant counters update in real-time.
+              </p>
+            </div>
+            <button
+              onClick={() => setActiveTab('jobs')}
+              className="flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+            >
+              Browse All Jobs <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {featuredJobs.map((job) => {
+              const override = (applicantCountOverrides?.[job.id] || 0) + (applicantCountOverrides?.[job.jobCode] || 0);
+              const totalApplicants = (job.applications || 0) + override;
+
+              return (
+                <div
+                  key={job.id}
+                  className="bg-white rounded-2xl border border-slate-200 hover:border-[#84CC16] p-5 shadow-xs hover:shadow-md transition-all space-y-4 flex flex-col justify-between"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1">
+                        <h3 className="font-extrabold text-slate-900 text-base sm:text-lg line-clamp-1">
+                          {job.title}
+                        </h3>
+                        <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold flex-wrap">
+                          <span>Job ID: {job.id}</span>
+                          <span>•</span>
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                            {job.postedAt ? new Date(job.postedAt).toLocaleDateString() : 'Recent'}
+                          </span>
+                          <span>•</span>
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[11px] border ${
+                            totalApplicants > 0
+                              ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                              : 'bg-slate-50 text-slate-500 border-slate-200'
+                          }`}>
+                            <Users2 className="w-3.5 h-3.5" />
+                            <span>{totalApplicants} Applicant{totalApplicants === 1 ? '' : 's'}</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                      <MapPin className="w-4 h-4 text-slate-700 shrink-0" />
+                      <span className="truncate">{job.location}</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <MenuIcon className="w-4 h-4 text-[#84CC16] shrink-0" />
+                        <div>
+                          <span className="block text-[11px] text-slate-400">Subjects</span>
+                          <span className="font-bold text-slate-800 truncate block max-w-[120px]">
+                            {Array.isArray(job.subjects) ? job.subjects.join(', ') : job.subjects}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Wallet className="w-4 h-4 text-[#84CC16] shrink-0" />
+                        <div>
+                          <span className="block text-[11px] text-slate-400">Salary</span>
+                          <span className="font-bold text-slate-800">৳ {job.salary} BDT</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+                      Verified Guardian
+                    </span>
+                    <button
+                      onClick={() => navigateToJobDetails(job.id)}
+                      className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+                    >
+                      View Details
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
     </div>
   );

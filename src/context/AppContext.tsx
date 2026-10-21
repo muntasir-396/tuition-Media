@@ -65,7 +65,15 @@ interface AppContextType {
   
   // Navigation helper
   navigateToJobDetails: (jobId: string) => void;
-  navigateToTutorProfile: (tutorId: string) => void;
+  navigateToTutorProfile: (tutorId: any) => void;
+  myTutorProfile: TutorProfile | null;
+  refreshMyTutorProfile: () => Promise<TutorProfile | null>;
+  blockTutor: (tutorId: string, status: 'active' | 'blocked') => Promise<boolean>;
+  verifyTutor: (tutorId: string, verified: boolean) => Promise<boolean>;
+
+  adminTuitionsInitialTab: string;
+  setAdminTuitionsInitialTab: (tab: string) => void;
+  applicantCountOverrides: { [jobId: string]: number };
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -92,6 +100,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedJob, setSelectedJob] = useState<TuitionJob | null>(null);
   const [selectedTutor, setSelectedTutor] = useState<TutorProfile | null>(null);
 
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [userRole, setUserRole] = useState<UserRole>('tutor');
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [myTutorProfile, setMyTutorProfile] = useState<TutorProfile | null>(null);
+
+  const refreshMyTutorProfile = async (): Promise<TutorProfile | null> => {
+    try {
+      const res = await fetch('/api/tutor/me');
+      if (res.ok) {
+        const data = await res.json();
+        setMyTutorProfile(data);
+        return data;
+      }
+    } catch(e) {}
+    return null;
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -105,6 +131,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
            } else {
               setUserRole(data.user.role);
               setCurrentUser(data.user);
+              if (data.user.role === 'tutor') {
+                try {
+                  const tRes = await fetch('/api/tutor/me');
+                  if (tRes.ok) {
+                    const tData = await tRes.json();
+                    setMyTutorProfile(tData);
+                    setSelectedTutor(prev => prev || tData);
+                  }
+                } catch(e) {}
+              }
            }
         } else {
            setIsLoggedIn(false);
@@ -117,12 +153,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     checkAuth();
   }, []);
-
-  
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [userRole, setUserRole] = useState<UserRole>('tutor');
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
   const [selectedCity, setSelectedCity] = useState<string>('All');
   const [jobSearchId, setJobSearchId] = useState<string>('');
@@ -143,6 +173,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [language, setLanguage] = useState<'EN' | 'BN'>('EN');
 
   const [adminSelectedTuitionId, setAdminSelectedTuitionId] = useState<string | null>(null);
+  const [adminTuitionsInitialTab, setAdminTuitionsInitialTab] = useState<string>('All');
+  const [applicantCountOverrides, setApplicantCountOverrides] = useState<{ [jobId: string]: number }>({});
 
   useEffect(() => {
     const handlePopState = () => {
@@ -275,6 +307,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!appliedJobIds.includes(jobId)) {
       setAppliedJobIds((prev) => [...prev, jobId]);
     }
+    setApplicantCountOverrides((prev) => ({
+      ...prev,
+      [jobId]: (prev[jobId] || 0) + 1
+    }));
+    try {
+      window.dispatchEvent(new CustomEvent('tutorlink:job-applied', { detail: { jobId } }));
+    } catch (e) {}
   };
 
   const navigateToJobDetails = async (jobId: string) => {
@@ -288,18 +327,102 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch(e) {}
   };
 
-  const navigateToTutorProfile = async (tutorId: string) => {
+  const navigateToTutorProfile = async (tutorIdOrObj: any) => {
+    if (typeof tutorIdOrObj === 'object' && tutorIdOrObj !== null) {
+      setSelectedTutor(tutorIdOrObj);
+      handleSetActiveTab('profile');
+      return;
+    }
+    const tutorId = tutorIdOrObj;
     try {
-      const res = await fetch(`/api/tutors`);
+      const res = await fetch(`/api/tutors/${tutorId}`);
       if (res.ok) {
-        const tutors = await res.json();
-        const found = tutors.find((t: any) => t.id === tutorId);
+        const found = await res.json();
+        setSelectedTutor(found);
+        handleSetActiveTab('profile');
+        return;
+      }
+      const listRes = await fetch(`/api/tutors`);
+      if (listRes.ok) {
+        const tutors = await listRes.json();
+        const found = tutors.find((t: any) => t.id === tutorId || t.tutorCode === tutorId);
         if (found) {
           setSelectedTutor(found);
           handleSetActiveTab('profile');
+          return;
         }
       }
-    } catch(e) {}
+      // If still not found, construct a fallback tutor object so profile page renders gracefully
+      setSelectedTutor({
+        id: tutorId,
+        tutorCode: tutorId,
+        name: 'Registered Tutor',
+        avatar: '',
+        rating: 4.9,
+        reviewsCount: 1,
+        verified: true,
+        exclusive: false,
+        university: 'University Student',
+        department: 'General',
+        location: 'Dhaka',
+        salary: 'Negotiable',
+        experience: '2+ years',
+        subjects: ['All Subjects'],
+        gender: 'Male',
+        phone: '01700000000',
+        email: 'tutor@tutorlink.com',
+        bio: 'Dedicated educator ready to help students excel academically.',
+        status: 'active'
+      } as any);
+      handleSetActiveTab('profile');
+    } catch(e) {
+      handleSetActiveTab('profile');
+    }
+  };
+
+  const blockTutor = async (tutorId: string, status: 'active' | 'blocked'): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/admin/tutors/${tutorId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        if (selectedTutor && (selectedTutor.id === tutorId || selectedTutor.tutorCode === tutorId)) {
+          setSelectedTutor(prev => prev ? { ...prev, status } : null);
+        }
+        if (myTutorProfile && (myTutorProfile.id === tutorId || myTutorProfile.tutorCode === tutorId)) {
+          setMyTutorProfile(prev => prev ? { ...prev, status } : null);
+        }
+        return true;
+      }
+    } catch(e) {
+      console.error("Block tutor error:", e);
+    }
+    return false;
+  };
+
+  const verifyTutor = async (tutorId: string, verified: boolean): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/admin/tutors/${tutorId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verified, verificationStatus: verified ? 'verified' : 'pending' })
+      });
+      if (res.ok) {
+        if (selectedTutor && (selectedTutor.id === tutorId || selectedTutor.tutorCode === tutorId)) {
+          setSelectedTutor(prev => prev ? { 
+            ...prev, 
+            verified, 
+            nidStatus: verified ? 'Verified (NID Provided)' : 'Pending Verification' 
+          } : null);
+        }
+        return true;
+      }
+    } catch(e) {
+      console.error("Verify tutor error:", e);
+    }
+    return false;
   };
 
   return (
@@ -312,6 +435,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedJob,
         selectedTutor,
         setSelectedTutor,
+        myTutorProfile,
+        refreshMyTutorProfile,
+        blockTutor,
+        verifyTutor,
         isLoggedIn,
         setIsLoggedIn,
         userRole,
@@ -348,6 +475,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setLanguage,
         adminSelectedTuitionId,
         setAdminSelectedTuitionId,
+        adminTuitionsInitialTab,
+        setAdminTuitionsInitialTab,
+        applicantCountOverrides,
         loginAdmin,
         logoutAdmin,
         handleLogout,

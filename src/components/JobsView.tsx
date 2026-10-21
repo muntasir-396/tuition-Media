@@ -31,16 +31,13 @@ export const JobsView: React.FC = () => {
     setIsFilterModalOpen,
     bookmarkedJobIds,
     toggleBookmark,
+    applicantCountOverrides,
   } = useApp();
 
   const [showCityAccordion, setShowCityAccordion] = useState<boolean>(false);
   const [sortBy, setSortBy] = useState<'latest' | 'salary-high' | 'salary-low'>('latest');
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchJobs();
-  }, []);
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -54,6 +51,28 @@ export const JobsView: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchJobs();
+
+    const handleApplied = (e: any) => {
+      const appliedJobId = e?.detail?.jobId;
+      if (appliedJobId) {
+        setJobs((prevJobs) =>
+          prevJobs.map((j) =>
+            j.id === appliedJobId || j.jobCode === appliedJobId
+              ? { ...j, applications: (j.applications || 0) + 1 }
+              : j
+          )
+        );
+      } else {
+        fetchJobs();
+      }
+    };
+
+    window.addEventListener('tutorlink:job-applied', handleApplied);
+    return () => window.removeEventListener('tutorlink:job-applied', handleApplied);
+  }, []);
 
   // Filter jobs dynamically
   const filteredJobs = jobs.filter((job) => {
@@ -221,6 +240,8 @@ export const JobsView: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {filteredJobs.map((job) => {
             const isBookmarked = bookmarkedJobIds.includes(job.id);
+            const override = (applicantCountOverrides?.[job.id] || 0) + (applicantCountOverrides?.[job.jobCode] || 0);
+            const totalApplicants = (job.applications || 0) + override;
 
             return (
               <div
@@ -230,16 +251,25 @@ export const JobsView: React.FC = () => {
                 {/* Header info matching Screenshot 1 */}
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       <h3 className="font-extrabold text-slate-900 text-lg sm:text-xl line-clamp-1 leading-tight">
                         {job.title}
                       </h3>
-                      <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold">
+                      <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold flex-wrap">
                         <span>Job Id: {job.id}</span>
                         <span>•</span>
                         <span className="flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5 text-slate-400" />
                           {job.postedAt}
+                        </span>
+                        <span>•</span>
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[11px] border ${
+                          totalApplicants > 0 
+                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200' 
+                            : 'bg-slate-50 text-slate-500 border-slate-200'
+                        }`}>
+                          <Users2 className="w-3.5 h-3.5" />
+                          <span>{totalApplicants} Applicant{totalApplicants === 1 ? '' : 's'}</span>
                         </span>
                       </div>
                     </div>

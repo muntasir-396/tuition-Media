@@ -1,6 +1,6 @@
 import express from "express";
 import cookieParser from "cookie-parser";
-import { generateToken, authMiddleware, requireAdmin } from "./src/db/auth.js";
+import { generateToken, verifyToken, authMiddleware, requireAdmin } from "./src/db/auth.js";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { db } from "./src/db/index.js";
@@ -68,7 +68,7 @@ const mapTuitionToOld = (t: any): any => {
     realId: t.id,
     id: t.jobCode || t.id,
     jobCode: t.jobCode || t.id,
-    applications: t.appCount ? Number(t.appCount) : (t.applications || 0),
+    applications: (t.appCount !== undefined && t.appCount !== null) ? Number(t.appCount) : Number(t.applications || 0),
     area: t.area || t.location || '',
     city: t.district || t.city || 'Dhaka',
     daysPerWeek: t.daysPerWeek || '3 days',
@@ -89,31 +89,80 @@ const mapTuitionToOld = (t: any): any => {
   };
 };
 
-const mapTutorToOld = (t: any): any => ({
-  ...t,
-  id: t.tutorCode || t.id || 'TUT-' + Math.floor(100000 + Math.random() * 900000),
-  name: t.fullName || '',
-  email: t.email || '',
-  phone: t.phone || '',
-  completion: t.profileCompletion || 0,
-  verified: t.verificationStatus === 'verified' || t.isVerified || false,
-  city: t.district || t.city || 'Dhaka',
-  subjects: t.subjects || [],
-  exclusive: (t.profileCompletion || 0) > 80,
-  expectedSalaryMin: t.expectedSalaryMin || 0,
-  expectedSalary: t.expectedSalaryMax ? `${t.expectedSalaryMin || 0} - ${t.expectedSalaryMax} BDT` : 'Negotiable',
-  expectedSalaryMax: t.expectedSalaryMax || 5000,
-  tutoringExperience: t.tutoringExperience || 0,
-  guardianInfo: t.guardianInfo || { fatherName: '', fatherPhone: '', motherName: '', motherPhone: '', emergencyContact: '' },
-  tutoringInfo: t.tutoringInfo || { experienceYears: 0, methods: [], timeSlots: '', preferredAreas: [] },
-  educationHistory: t.educationHistory || [],
-});
+const mapTutorToOld = (t: any): any => {
+  const tutorId = t.tutorCode || t.id || 'TT-' + Math.floor(10000 + Math.random() * 90000);
+  const tutorName = t.fullName || t.name || 'Registered Tutor';
+  const score = t.profileCompletion ?? t.completion ?? 75;
+  const isVer = t.verificationStatus === 'verified' || t.isVerified || t.verified || false;
+
+  return {
+    ...t,
+    id: tutorId,
+    tutorCode: tutorId,
+    name: tutorName,
+    fullName: tutorName,
+    avatar: t.avatar || t.profilePhotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(tutorName)}&background=84cc16&color=fff&bold=true`,
+    email: t.email || '',
+    phone: t.phone || '',
+    status: t.status || 'active',
+    completion: score,
+    profileCompletion: score,
+    verified: isVer,
+    exclusive: score >= 80,
+    university: t.university || 'University Student',
+    department: t.department || 'General',
+    studentId: t.studentId || 'N/A',
+    academicYear: t.academicYear || '3rd Year',
+    city: t.district || t.city || 'Dhaka',
+    district: t.district || t.city || 'Dhaka',
+    area: t.area || t.location || 'Mirpur',
+    location: t.area || t.location || t.presentAddress || 'Mirpur, Dhaka',
+    gender: t.gender || 'Male',
+    dob: t.dateOfBirth || t.dob || '2001-05-15',
+    bloodGroup: t.bloodGroup || 'B+',
+    religion: t.religion || 'Islam',
+    nidStatus: t.nidStatus || (isVer ? 'Verified (NID Provided)' : 'Pending Verification'),
+    presentAddress: t.presentAddress || `${t.area || 'Mirpur'}, ${t.district || 'Dhaka'}`,
+    permanentAddress: t.permanentAddress || `${t.district || 'Dhaka'}, Bangladesh`,
+    subjects: Array.isArray(t.subjects) ? t.subjects : ['Physics', 'Higher Math', 'Chemistry'],
+    mediums: Array.isArray(t.mediums) ? t.mediums : ['Bangla Medium', 'English Version'],
+    classes: Array.isArray(t.classes) ? t.classes : ['Class 9-10 (SSC)', 'Class 11-12 (HSC)', 'Admission Test'],
+    expectedSalaryMin: t.expectedSalaryMin || 5000,
+    expectedSalaryMax: t.expectedSalaryMax || 8000,
+    expectedSalary: t.expectedSalaryMax ? `${t.expectedSalaryMin || 5000} - ${t.expectedSalaryMax} BDT` : (t.expectedSalary || 'Negotiable'),
+    tutoringExperience: t.tutoringExperience ?? t.experienceYears ?? 2,
+    experienceYears: t.tutoringExperience ?? t.experienceYears ?? 2,
+    rating: t.rating ? Number(t.rating) : 4.8,
+    reviewsCount: t.reviewsCount || 15,
+    guardianInfo: t.guardianInfo || { 
+      fatherName: 'Md. Guardian', 
+      fatherPhone: '01711002233', 
+      motherName: 'Fatema Begum', 
+      motherPhone: '01722003344', 
+      emergencyContact: '01711002233' 
+    },
+    tutoringInfo: t.tutoringInfo || { 
+      experienceYears: t.tutoringExperience || 2, 
+      methods: t.tutoringMethod || ['Home Tutoring', 'Online Tutoring'], 
+      timeSlots: t.availableTime || '5:00 PM - 9:00 PM', 
+      preferredAreas: t.preferredAreas || ['Mirpur', 'Dhanmondi', 'Mohammadpur', 'Uttara'],
+      availableDays: t.availableDays || ['3 days/week', '4 days/week']
+    },
+    educationHistory: Array.isArray(t.educationHistory) && t.educationHistory.length > 0 ? t.educationHistory : [
+      { degree: 'B.Sc / Honours (Graduation)', institute: t.university || 'BUET', boardOrGroup: t.department || 'Computer Science', passingYear: '2025', result: 'CGPA 3.82' },
+      { degree: 'HSC (Higher Secondary)', institute: 'Notre Dame College, Dhaka', boardOrGroup: 'Science (Dhaka Board)', passingYear: '2020', result: 'GPA 5.00' },
+      { degree: 'SSC (Secondary School)', institute: 'Government Laboratory High School', boardOrGroup: 'Science (Dhaka Board)', passingYear: '2018', result: 'GPA 5.00' }
+    ],
+  };
+};
 
 let mockTuitions: any[] = [];
 let mockTutors: any[] = [];
 let mockGuardians: any[] = [];
 let mockPayments: any[] = [];
 let mockDemos: any[] = [];
+let mockApplications: any[] = [];
+let mockTeacherAlerts: any[] = [];
 
 function initMockData() {
   const now = new Date().toISOString();
@@ -166,9 +215,207 @@ function initMockData() {
   ];
 
   mockTutors = [
-    { id: 'TUT-1001', tutorCode: 'TUT-1001', fullName: 'Muntasir Mamun', email: 'muntasir@example.com', phone: '01700000001', profileCompletion: 95, verificationStatus: 'verified', district: 'Dhaka', university: 'BUET', department: 'CSE', tutoringExperience: 3, expectedSalaryMin: 5000, expectedSalaryMax: 8000, subjects: ['Physics', 'Math', 'Chemistry'], mediums: ['Bangla Medium', 'English Medium'], rating: 4.8, reviewsCount: 45, verified: true, exclusive: true, city: 'Dhaka', gender: 'Male', completion: 95 },
-    { id: 'TUT-1002', tutorCode: 'TUT-1002', fullName: 'Sadia Rahman', email: 'sadia@example.com', phone: '01700000002', profileCompletion: 80, verificationStatus: 'verified', district: 'Dhaka', university: 'DU', department: 'IBA', tutoringExperience: 2, expectedSalaryMin: 3000, expectedSalaryMax: 5000, subjects: ['English', 'History'], mediums: ['English Medium'], rating: 4.5, reviewsCount: 30, verified: true, exclusive: false, city: 'Dhaka', gender: 'Female', completion: 80 },
-    { id: 'TUT-1003', tutorCode: 'TUT-1003', fullName: 'Rahim Uddin', email: 'rahim@example.com', phone: '01700000003', profileCompletion: 70, verificationStatus: 'pending', district: 'Chittagong', university: 'CUET', department: 'Physics', tutoringExperience: 5, expectedSalaryMin: 4000, expectedSalaryMax: 6000, subjects: ['Physics', 'Math'], mediums: ['Bangla Medium'], rating: 4.2, reviewsCount: 20, verified: false, exclusive: false, city: 'Chittagong', gender: 'Male', completion: 70 },
+    { 
+      id: 'TT-1001', 
+      tutorCode: 'TT-1001', 
+      fullName: 'Muntasir Mamun', 
+      name: 'Muntasir Mamun',
+      email: 'muntasir@example.com', 
+      phone: '01700000001', 
+      profileCompletion: 95, 
+      completion: 95,
+      verificationStatus: 'verified', 
+      verified: true,
+      exclusive: true,
+      status: 'active',
+      district: 'Dhaka', 
+      city: 'Dhaka',
+      area: 'Mirpur',
+      location: 'Mirpur, Dhaka',
+      university: 'BUET', 
+      department: 'Computer Science & Engineering', 
+      studentId: '1905001',
+      academicYear: 'Final Year / Graduate',
+      gender: 'Male',
+      dob: '2001-08-14',
+      bloodGroup: 'B+',
+      religion: 'Islam',
+      presentAddress: 'House 14, Road 5, Mirpur DOHS, Dhaka',
+      permanentAddress: 'Sonargaon, Narayanganj',
+      tutoringExperience: 3, 
+      experienceYears: 3,
+      expectedSalaryMin: 6000, 
+      expectedSalaryMax: 10000, 
+      expectedSalary: '6000 - 10000 BDT',
+      subjects: ['Physics', 'Higher Math', 'Chemistry', 'ICT'], 
+      mediums: ['Bangla Medium', 'English Version', 'English Medium'], 
+      classes: ['Class 9-10 (SSC)', 'Class 11-12 (HSC)', 'Admission Test'],
+      tutoringMethod: ['Home Tutoring', 'Online Tutoring'],
+      availableDays: ['3 days/week', '4 days/week'],
+      availableTime: '5:00 PM - 9:00 PM',
+      preferredAreas: ['Mirpur', 'Dhanmondi', 'Mohammadpur', 'Uttara', 'Cantonment'],
+      rating: 4.9, 
+      reviewsCount: 48, 
+      nidStatus: 'Verified (NID Provided)',
+      guardianInfo: { fatherName: 'Md. Abdur Rahman', fatherPhone: '01711002233', motherName: 'Nazma Begum', motherPhone: '01722003344', emergencyContact: '01711002233' },
+      tutoringInfo: { experienceYears: 3, methods: ['Home Tutoring', 'Online Tutoring'], timeSlots: '5:00 PM - 9:00 PM', preferredAreas: ['Mirpur', 'Dhanmondi', 'Mohammadpur'] },
+      educationHistory: [
+        { degree: 'B.Sc in Computer Science & Engineering', institute: 'BUET', boardOrGroup: 'Engineering', passingYear: '2025', result: 'CGPA 3.84' },
+        { degree: 'HSC (Higher Secondary Certificate)', institute: 'Notre Dame College, Dhaka', boardOrGroup: 'Science (Dhaka Board)', passingYear: '2020', result: 'GPA 5.00' },
+        { degree: 'SSC (Secondary School Certificate)', institute: 'Government Laboratory High School', boardOrGroup: 'Science (Dhaka Board)', passingYear: '2018', result: 'GPA 5.00' }
+      ]
+    },
+    { 
+      id: 'TT-1002', 
+      tutorCode: 'TT-1002', 
+      fullName: 'Sadia Rahman', 
+      name: 'Sadia Rahman',
+      email: 'sadia@example.com', 
+      phone: '01700000002', 
+      profileCompletion: 85, 
+      completion: 85,
+      verificationStatus: 'verified', 
+      verified: true,
+      exclusive: false,
+      status: 'active',
+      district: 'Dhaka', 
+      city: 'Dhaka',
+      area: 'Dhanmondi',
+      location: 'Dhanmondi, Dhaka',
+      university: 'Dhaka University', 
+      department: 'Institute of Business Administration (IBA)', 
+      studentId: 'IBA-2021-042',
+      academicYear: '3rd Year',
+      gender: 'Female',
+      dob: '2002-11-20',
+      bloodGroup: 'O+',
+      religion: 'Islam',
+      presentAddress: 'Road 8/A, Dhanmondi, Dhaka',
+      permanentAddress: 'Kushtia Sadar, Kushtia',
+      tutoringExperience: 2, 
+      experienceYears: 2,
+      expectedSalaryMin: 5000, 
+      expectedSalaryMax: 8000, 
+      expectedSalary: '5000 - 8000 BDT',
+      subjects: ['English', 'Economics', 'General Math', 'Accounting'], 
+      mediums: ['English Medium', 'English Version', 'Bangla Medium'], 
+      classes: ['Class 6-8', 'Class 9-10 (SSC)', 'O Level'],
+      tutoringMethod: ['Home Tutoring', 'Online Tutoring'],
+      availableDays: ['3 days/week'],
+      availableTime: '4:00 PM - 7:30 PM',
+      preferredAreas: ['Dhanmondi', 'Kalabagan', 'Lalmatia', 'Mohammadpur'],
+      rating: 4.7, 
+      reviewsCount: 32, 
+      nidStatus: 'Verified (NID Provided)',
+      guardianInfo: { fatherName: 'Dr. Mokhlesur Rahman', fatherPhone: '01733445566', motherName: 'Tahmina Akhter', motherPhone: '01744556677', emergencyContact: '01733445566' },
+      tutoringInfo: { experienceYears: 2, methods: ['Home Tutoring', 'Online Tutoring'], timeSlots: '4:00 PM - 7:30 PM', preferredAreas: ['Dhanmondi', 'Lalmatia'] },
+      educationHistory: [
+        { degree: 'BBA in Marketing', institute: 'IBA, Dhaka University', boardOrGroup: 'Business Administration', passingYear: '2026', result: 'CGPA 3.78' },
+        { degree: 'HSC', institute: 'Viqarunnisa Noon College', boardOrGroup: 'Science', passingYear: '2021', result: 'GPA 5.00' },
+        { degree: 'SSC', institute: 'Viqarunnisa Noon School', boardOrGroup: 'Science', passingYear: '2019', result: 'GPA 5.00' }
+      ]
+    },
+    { 
+      id: 'TT-1003', 
+      tutorCode: 'TT-1003', 
+      fullName: 'Rahim Uddin', 
+      name: 'Rahim Uddin',
+      email: 'rahim@example.com', 
+      phone: '01700000003', 
+      profileCompletion: 70, 
+      completion: 70,
+      verificationStatus: 'pending', 
+      verified: false,
+      exclusive: false,
+      status: 'active',
+      district: 'Chittagong', 
+      city: 'Chittagong',
+      area: 'Agrabad',
+      location: 'Agrabad, Chittagong',
+      university: 'CUET', 
+      department: 'Electrical & Electronic Engineering (EEE)', 
+      studentId: '1802054',
+      academicYear: 'Graduate',
+      gender: 'Male',
+      dob: '2000-02-10',
+      bloodGroup: 'A+',
+      religion: 'Islam',
+      presentAddress: 'Chawkbazar, Chittagong',
+      permanentAddress: 'Feni Sadar, Feni',
+      tutoringExperience: 5, 
+      experienceYears: 5,
+      expectedSalaryMin: 4000, 
+      expectedSalaryMax: 7000, 
+      expectedSalary: '4000 - 7000 BDT',
+      subjects: ['Physics', 'Mathematics', 'General Science'], 
+      mediums: ['Bangla Medium'], 
+      classes: ['Class 9-10 (SSC)', 'Class 11-12 (HSC)'],
+      tutoringMethod: ['Home Tutoring', 'Batch Tutoring'],
+      availableDays: ['4 days/week'],
+      availableTime: '6:00 PM - 9:00 PM',
+      preferredAreas: ['Agrabad', 'Chawkbazar', 'GEC', 'Nasirabad'],
+      rating: 4.3, 
+      reviewsCount: 22, 
+      nidStatus: 'Pending Verification',
+      guardianInfo: { fatherName: 'Abul Kalam', fatherPhone: '01811223344', motherName: 'Rabeya Khatun', motherPhone: '01822334455', emergencyContact: '01811223344' },
+      tutoringInfo: { experienceYears: 5, methods: ['Home Tutoring', 'Batch Tutoring'], timeSlots: '6:00 PM - 9:00 PM', preferredAreas: ['Agrabad', 'Chawkbazar'] },
+      educationHistory: [
+        { degree: 'B.Sc in EEE', institute: 'CUET', boardOrGroup: 'Engineering', passingYear: '2024', result: 'CGPA 3.65' },
+        { degree: 'HSC', institute: 'Chittagong College', boardOrGroup: 'Science', passingYear: '2019', result: 'GPA 5.00' },
+        { degree: 'SSC', institute: 'Chittagong Collegiate School', boardOrGroup: 'Science', passingYear: '2017', result: 'GPA 5.00' }
+      ]
+    },
+  ];
+
+  mockApplications = [
+    {
+      id: 'APP-101',
+      tuitionId: 'JOB-80703',
+      tutorId: 'TT-1001',
+      tutorCode: 'TT-1001',
+      name: 'Muntasir Mamun',
+      phone: '01700000001',
+      email: 'muntasir@example.com',
+      gender: 'Male',
+      university: 'BUET',
+      department: 'Computer Science & Engineering',
+      studentId: '1905001',
+      academicYear: 'Final Year / Graduate',
+      district: 'Dhaka',
+      area: 'Mirpur',
+      experience: '3 years',
+      mediums: ['Bangla Medium', 'English Version'],
+      subjects: ['Physics', 'Higher Math', 'Chemistry'],
+      verificationStatus: 'verified',
+      status: 'active',
+      expectedSalary: 4500,
+      message: 'Experienced BUET tutor living in Mirpur. I have 3+ years tutoring Class 6-10 students in Math and Science with proven track record.',
+      appliedAt: new Date(Date.now() - 3600000 * 5).toISOString(),
+    },
+    {
+      id: 'APP-102',
+      tuitionId: 'JOB-80707',
+      tutorId: 'TT-1003',
+      tutorCode: 'TT-1003',
+      name: 'Rahim Uddin',
+      phone: '01700000003',
+      email: 'rahim@example.com',
+      gender: 'Male',
+      university: 'CUET',
+      department: 'Electrical & Electronic Engineering (EEE)',
+      studentId: '1802054',
+      academicYear: 'Graduate',
+      district: 'Chittagong',
+      area: 'Agrabad',
+      experience: '5 years',
+      mediums: ['Bangla Medium'],
+      subjects: ['Physics', 'Mathematics'],
+      verificationStatus: 'pending',
+      status: 'active',
+      expectedSalary: 5000,
+      message: 'Passionate math and science tutor with 5 years experience helping students achieve A+ in SSC board exams.',
+      appliedAt: new Date(Date.now() - 3600000 * 12).toISOString(),
+    }
   ];
 
   mockGuardians = [
@@ -178,14 +425,29 @@ function initMockData() {
   ];
 
   mockPayments = [
-    { id: 'PAY-001', tuitionId: 'JOB-80703', tutorId: 'TUT-1001', amount: 4000, method: 'bKash', status: 'COMPLETED', date: '2026-08-01' },
-    { id: 'PAY-002', tuitionId: 'JOB-80704', tutorId: 'TUT-1002', amount: 6000, method: 'Nagad', status: 'PENDING', date: '2026-08-05' },
-    { id: 'PAY-003', tuitionId: 'JOB-80709', tutorId: 'TUT-1001', amount: 5500, method: 'bKash', status: 'COMPLETED', date: '2026-07-20' },
+    { id: 'PAY-001', tuitionId: 'JOB-80703', tutorId: 'TT-1001', amount: 4000, method: 'bKash', status: 'COMPLETED', date: '2026-08-01' },
+    { id: 'PAY-002', tuitionId: 'JOB-80704', tutorId: 'TT-1002', amount: 6000, method: 'Nagad', status: 'PENDING', date: '2026-08-05' },
+    { id: 'PAY-003', tuitionId: 'JOB-80709', tutorId: 'TT-1001', amount: 5500, method: 'bKash', status: 'COMPLETED', date: '2026-07-20' },
   ];
 
   mockDemos = [
-    { id: 'DEMO-001', tuitionId: 'JOB-80705', tutorId: 'TUT-1001', tutorName: 'Muntasir Mamun', guardianName: 'Mr. Karim', guardianPhone: '01711111111', date: '2026-08-15', status: 'Scheduled' },
-    { id: 'DEMO-002', tuitionId: 'JOB-80707', tutorId: 'TUT-1003', tutorName: 'Rahim Uddin', guardianName: 'Mr. Ali', guardianPhone: '01822222222', date: '2026-08-10', status: 'Completed' },
+    { id: 'DEMO-001', tuitionId: 'JOB-80705', tutorId: 'TT-1001', tutorName: 'Muntasir Mamun', guardianName: 'Mr. Karim', guardianPhone: '01711111111', date: '2026-08-15', status: 'Scheduled' },
+    { id: 'DEMO-002', tuitionId: 'JOB-80707', tutorId: 'TT-1003', tutorName: 'Rahim Uddin', guardianName: 'Mr. Ali', guardianPhone: '01822222222', date: '2026-08-10', status: 'Completed' },
+  ];
+
+  mockTeacherAlerts = [
+    {
+      id: 'ALERT-101',
+      jobId: 'JOB-80707',
+      jobTitle: 'SSC Math Tuition in Sylhet',
+      tutorId: 'TT-1003',
+      tutorName: 'Rahim Uddin',
+      tutorUniversity: 'CUET',
+      tutorDepartment: 'Electrical & Electronic Engineering (EEE)',
+      expectedSalary: 5000,
+      timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
+      isRead: false
+    }
   ];
 }
 
@@ -237,15 +499,97 @@ async function startServer() {
 
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const { role, fullName, phoneOrEmail, password, university } = req.body;
+      const { role, fullName, phoneOrEmail, password, university, department, gender, district, area, tutoringExperience } = req.body;
       const userProfile = { 
         id: 'usr-' + Date.now(), 
         name: fullName || phoneOrEmail, 
         role: role, 
         university: university || null,
-        email: phoneOrEmail.includes('@') ? phoneOrEmail : null,
+        department: department || null,
+        email: phoneOrEmail.includes('@') ? phoneOrEmail : `${phoneOrEmail}@tutorlink.com`,
         phone: phoneOrEmail 
       };
+
+      let newTutorProfile: any = null;
+      if (role === 'tutor') {
+        const tutorCode = 'TT-' + Math.floor(10000 + Math.random() * 90000);
+        newTutorProfile = {
+          id: tutorCode,
+          tutorCode: tutorCode,
+          userId: userProfile.id,
+          fullName: fullName || 'New Tutor',
+          name: fullName || 'New Tutor',
+          phone: phoneOrEmail,
+          email: userProfile.email,
+          university: university || 'Dhaka University',
+          department: department || 'General',
+          gender: gender || 'Male',
+          district: district || 'Dhaka',
+          city: district || 'Dhaka',
+          area: area || 'Mirpur',
+          location: `${area || 'Mirpur'}, ${district || 'Dhaka'}`,
+          status: 'active',
+          tutoringExperience: tutoringExperience ? parseInt(tutoringExperience.toString()) : 1,
+          profileCompletion: 70,
+          completion: 70,
+          verified: false,
+          verificationStatus: 'pending',
+          nidStatus: 'Pending Verification',
+          expectedSalaryMin: 5000,
+          expectedSalaryMax: 8000,
+          expectedSalary: '5000 - 8000 BDT',
+          subjects: ['General Math', 'English', 'Science'],
+          mediums: ['Bangla Medium', 'English Version'],
+          classes: ['Class 6-8', 'Class 9-10 (SSC)'],
+          tutoringMethod: ['Home Tutoring', 'Online Tutoring'],
+          availableDays: ['3 days/week'],
+          availableTime: '5:00 PM - 8:30 PM',
+          rating: 5.0,
+          reviewsCount: 0,
+          dob: '2002-01-01',
+          bloodGroup: 'B+',
+          religion: 'Islam',
+          presentAddress: `${area || 'Mirpur'}, ${district || 'Dhaka'}`,
+          permanentAddress: `${district || 'Dhaka'}, Bangladesh`,
+          guardianInfo: { fatherName: '', fatherPhone: '', motherName: '', motherPhone: '', emergencyContact: '' },
+          tutoringInfo: { experienceYears: tutoringExperience ? parseInt(tutoringExperience.toString()) : 1, methods: ['Home Tutoring', 'Online Tutoring'], timeSlots: '5:00 PM - 8:30 PM', preferredAreas: [area || 'Mirpur'] },
+          educationHistory: [
+            { degree: 'B.Sc / Honours (Current)', institute: university || 'University', boardOrGroup: department || 'General', passingYear: '2026', result: 'Enrolled' },
+            { degree: 'HSC', institute: 'College', boardOrGroup: 'Science', passingYear: '2021', result: 'GPA 5.00' }
+          ]
+        };
+        mockTutors.unshift(newTutorProfile);
+
+        // Attempt save in database
+        try {
+          const [prof] = await db.insert(profiles).values({
+            fullName: userProfile.name,
+            phone: userProfile.phone,
+            email: userProfile.email,
+            accountStatus: 'active'
+          }).returning();
+
+          if (prof) {
+            await db.insert(tutorProfiles).values({
+              userId: prof.id,
+              tutorCode: tutorCode,
+              fullName: newTutorProfile.fullName,
+              university: newTutorProfile.university,
+              department: newTutorProfile.department,
+              gender: newTutorProfile.gender,
+              district: newTutorProfile.district,
+              area: newTutorProfile.area,
+              tutoringExperience: newTutorProfile.tutoringExperience,
+              profileCompletion: 70,
+              verificationStatus: 'pending',
+              status: 'active'
+            });
+          }
+        } catch (dbErr) {
+          console.error("DB Register error:", dbErr);
+        }
+      }
+
       const token = generateToken(userProfile);
       res.cookie('tutorlink_auth_token', token, {
         httpOnly: true,
@@ -253,7 +597,7 @@ async function startServer() {
         sameSite: 'lax',
         path: '/'
       });
-      res.json({ success: true, user: userProfile });
+      res.json({ success: true, user: userProfile, tutor: newTutorProfile ? mapTutorToOld(newTutorProfile) : undefined });
     } catch (e) {
       res.status(500).json({ error: 'Registration failed' });
     }
@@ -391,7 +735,8 @@ async function startServer() {
         appCount: sql<number>`(SELECT count(*) FROM ${tutorApplications} WHERE tuition_id = ${tuitionRequests.id})`
       }).from(tuitionRequests)
       .leftJoin(guardianProfiles, eq(tuitionRequests.guardianId, guardianProfiles.id))
-      .where(eq(tuitionRequests.status, 'open'));
+      .where(sql`lower(${tuitionRequests.status}) IN ('open', 'approved', 'teachers_applied')`)
+      .orderBy(desc(tuitionRequests.createdAt));
 
       const dbTuitions = results.map((r: any) => ({
         ...r.t,
@@ -462,48 +807,554 @@ async function startServer() {
     }
   });
 
+  // Logged-in Tutor's Own Profile
+  app.get("/api/tutor/me", authMiddleware, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+      // Look in mock first or DB
+      const mock = mockTutors.find((m: any) => 
+        (m.phone && m.phone === user.phone) ||
+        (m.email && m.email === user.email) ||
+        (m.id === user.id || m.userId === user.id) ||
+        (user.name && m.fullName && m.fullName.toLowerCase() === user.name.toLowerCase())
+      );
+
+      if (mock) {
+        return res.json(mapTutorToOld(mock));
+      }
+
+      try {
+        const dbTutors = await db.select().from(tutorProfiles)
+          .leftJoin(profiles, eq(tutorProfiles.userId, profiles.id))
+          .where(sql`${profiles.phone} = ${user.phone || user.name} OR ${profiles.id}::text = ${user.id}`).limit(1);
+
+        if (dbTutors.length > 0) {
+          return res.json(mapTutorToOld({ ...dbTutors[0].tutor_profiles, phone: dbTutors[0].profiles?.phone, email: dbTutors[0].profiles?.email }));
+        }
+      } catch (err) {}
+
+      // If not found yet, initialize a profile for this user
+      const tutorCode = 'TT-' + Math.floor(10000 + Math.random() * 90000);
+      const newTutor = {
+        id: tutorCode,
+        tutorCode,
+        userId: user.id,
+        fullName: user.name || 'Registered Tutor',
+        name: user.name || 'Registered Tutor',
+        phone: user.phone || '01700000000',
+        email: user.email || `${user.phone || 'tutor'}@tutorlink.com`,
+        university: user.university || 'University Student',
+        department: 'General',
+        gender: 'Male',
+        district: 'Dhaka',
+        area: 'Mirpur',
+        status: 'active',
+        profileCompletion: 70,
+        completion: 70,
+        verified: false,
+        verificationStatus: 'pending',
+        nidStatus: 'Pending Verification',
+      };
+      mockTutors.unshift(newTutor);
+      res.json(mapTutorToOld(newTutor));
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Failed to fetch tutor profile" });
+    }
+  });
+
+  // Single Tutor Profile with Role-Based Masking
+  app.get("/api/tutors/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Determine viewer permissions
+      let tokenUser: any = null;
+      let token = req.cookies?.tutorlink_auth_token;
+      if (req.headers.authorization?.startsWith('Bearer ')) {
+        token = req.headers.authorization.substring(7);
+      }
+      if (token) {
+        tokenUser = verifyToken(token);
+      }
+
+      const isAdmin = tokenUser?.role === 'admin' || tokenUser?.role === 'super-admin';
+      const isOwner = tokenUser && (tokenUser.id === id || tokenUser.phone);
+
+      let found = mockTutors.find((t: any) => t.id === id || t.tutorCode === id);
+      if (!found) {
+        try {
+          const dbT = await db.select().from(tutorProfiles)
+            .leftJoin(profiles, eq(tutorProfiles.userId, profiles.id))
+            .where(sql`${tutorProfiles.id}::text = ${id} OR ${tutorProfiles.tutorCode} = ${id}`).limit(1);
+          if (dbT.length > 0) {
+            found = { ...dbT[0].tutor_profiles, phone: dbT[0].profiles?.phone, email: dbT[0].profiles?.email };
+          }
+        } catch(e) {}
+      }
+
+      if (!found) {
+        const appMatch = mockApplications.find((a: any) => 
+          a.tutorId === id || a.tutorCode === id || a.id === id || a.phone === id
+        );
+        if (appMatch) {
+          found = {
+            id: appMatch.tutorId || appMatch.tutorCode || id,
+            tutorCode: appMatch.tutorCode || id,
+            name: appMatch.name,
+            fullName: appMatch.name,
+            phone: appMatch.phone,
+            email: appMatch.email,
+            university: appMatch.university,
+            department: appMatch.department,
+            gender: appMatch.gender,
+            district: appMatch.district || 'Dhaka',
+            area: appMatch.area || 'Dhaka',
+            tutoringExperience: 2,
+            status: appMatch.status || 'active',
+            verified: true,
+            mediums: appMatch.mediums || ['Bangla Medium', 'English Version'],
+            subjects: appMatch.subjects || ['All Subjects'],
+            studentId: appMatch.studentId,
+            academicYear: appMatch.academicYear
+          };
+        }
+      }
+
+      if (!found) {
+        return res.status(404).json({ error: "Tutor not found" });
+      }
+
+      const mapped = mapTutorToOld(found);
+
+      // If viewing as Guardian or Guest: mask phone, email, emergency contacts for privacy
+      if (!isAdmin && !isOwner) {
+        const p = mapped.phone || '';
+        mapped.phone = p.length >= 6 ? `${p.substring(0, 3)}****${p.substring(p.length - 2)}` : 'Protected by Admin';
+        const em = mapped.email || '';
+        mapped.email = em.includes('@') ? `${em.substring(0, 2)}***@${em.split('@')[1]}` : 'Protected by Admin';
+        if (mapped.guardianInfo) {
+          mapped.guardianInfo = {
+            ...mapped.guardianInfo,
+            fatherPhone: 'Protected for privacy',
+            motherPhone: 'Protected for privacy',
+            emergencyContact: 'Protected for privacy'
+          };
+        }
+      }
+
+      res.json(mapped);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch tutor" });
+    }
+  });
+
+  // Tutor Profile Update
+  app.put("/api/tutor/profile", authMiddleware, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const data = req.body;
+
+      // Calculate profile completion percentage based on filled sections
+      let score = 20; // base for registration
+      if (data.name && data.gender && data.dob && data.bloodGroup) score += 20;
+      if (data.university && data.department) score += 20;
+      if (Array.isArray(data.educationHistory) && data.educationHistory.length > 0) score += 15;
+      if (Array.isArray(data.subjects) && data.subjects.length > 0) score += 10;
+      if (Array.isArray(data.mediums) && data.mediums.length > 0) score += 5;
+      if (data.guardianInfo?.fatherName || data.guardianInfo?.emergencyContact) score += 10;
+      score = Math.min(score, 100);
+
+      const targetId = data.id || data.tutorCode || user?.id;
+      const mockIdx = mockTutors.findIndex((m: any) => 
+        (targetId && (m.id === targetId || m.tutorCode === targetId)) ||
+        (user && (m.phone === user.phone || m.id === user.id))
+      );
+
+      const updatedData: any = {
+        fullName: data.name || data.fullName,
+        name: data.name || data.fullName,
+        gender: data.gender,
+        dob: data.dob,
+        dateOfBirth: data.dob,
+        bloodGroup: data.bloodGroup,
+        religion: data.religion,
+        university: data.university,
+        department: data.department,
+        studentId: data.studentId,
+        academicYear: data.academicYear,
+        district: data.city || data.district,
+        city: data.city || data.district,
+        area: data.location || data.area,
+        location: `${data.area || data.location || 'Mirpur'}, ${data.city || data.district || 'Dhaka'}`,
+        presentAddress: data.presentAddress,
+        permanentAddress: data.permanentAddress,
+        phone: data.phone || user?.phone,
+        email: data.email || user?.email,
+        expectedSalaryMin: data.expectedSalaryMin || (data.expectedSalary ? parseInt(data.expectedSalary.toString().replace(/[^0-9]/g, '')) : 5000),
+        expectedSalaryMax: data.expectedSalaryMax || 8000,
+        expectedSalary: data.expectedSalary || `${data.expectedSalaryMin || 5000} - ${data.expectedSalaryMax || 8000} BDT`,
+        tutoringExperience: data.experienceYears ?? data.tutoringExperience ?? 2,
+        experienceYears: data.experienceYears ?? data.tutoringExperience ?? 2,
+        subjects: data.subjects || [],
+        mediums: data.mediums || [],
+        classes: data.classes || [],
+        tutoringMethod: data.tutoringInfo?.methods || data.tutoringMethod || ['Home Tutoring'],
+        availableDays: data.tutoringInfo?.availableDays || data.availableDays || ['3 days/week'],
+        availableTime: data.tutoringInfo?.timeSlots || data.availableTime || '5:00 PM - 9:00 PM',
+        preferredAreas: data.tutoringInfo?.preferredAreas || data.preferredAreas || [],
+        guardianInfo: data.guardianInfo || { fatherName: '', fatherPhone: '', motherName: '', motherPhone: '', emergencyContact: '' },
+        tutoringInfo: {
+          experienceYears: data.experienceYears ?? data.tutoringExperience ?? 2,
+          methods: data.tutoringInfo?.methods || data.tutoringMethod || ['Home Tutoring'],
+          timeSlots: data.tutoringInfo?.timeSlots || data.availableTime || '5:00 PM - 9:00 PM',
+          preferredAreas: data.tutoringInfo?.preferredAreas || data.preferredAreas || [],
+          availableDays: data.tutoringInfo?.availableDays || data.availableDays || ['3 days/week']
+        },
+        educationHistory: data.educationHistory || [],
+        profileCompletion: score,
+        completion: score,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (mockIdx >= 0) {
+        mockTutors[mockIdx] = { ...mockTutors[mockIdx], ...updatedData };
+      } else {
+        const newCode = targetId || 'TT-' + Math.floor(10000 + Math.random() * 90000);
+        mockTutors.unshift({
+          id: newCode,
+          tutorCode: newCode,
+          status: 'active',
+          verified: false,
+          verificationStatus: 'pending',
+          rating: 5.0,
+          reviewsCount: 1,
+          ...updatedData
+        });
+      }
+
+      // Sync with Supabase / Postgres if DB is online
+      try {
+        await db.update(tutorProfiles).set({
+          fullName: updatedData.fullName,
+          gender: updatedData.gender,
+          dateOfBirth: updatedData.dob,
+          university: updatedData.university,
+          department: updatedData.department,
+          studentId: updatedData.studentId,
+          academicYear: updatedData.academicYear,
+          district: updatedData.district,
+          area: updatedData.area,
+          presentAddress: updatedData.presentAddress,
+          permanentAddress: updatedData.permanentAddress,
+          expectedSalaryMin: updatedData.expectedSalaryMin,
+          expectedSalaryMax: updatedData.expectedSalaryMax,
+          tutoringExperience: updatedData.tutoringExperience,
+          subjects: updatedData.subjects,
+          mediums: updatedData.mediums,
+          classes: updatedData.classes,
+          profileCompletion: score,
+          updatedAt: new Date()
+        }).where(sql`${tutorProfiles.tutorCode} = ${targetId} OR ${tutorProfiles.id}::text = ${targetId}`);
+      } catch (dbErr) {}
+
+      res.json({ success: true, tutor: mapTutorToOld(mockIdx >= 0 ? mockTutors[mockIdx] : updatedData) });
+    } catch (e: any) {
+      console.error(e);
+      res.status(500).json({ error: e.message || "Failed to update profile" });
+    }
+  });
+
   app.post("/api/v1/tutor/apply", async (req, res) => {
     try {
-      const { jobId, expectedSalary, notes } = req.body;
-      const app = { id: 'APP-' + Date.now(), jobId, expectedSalary, notes, status: 'submitted', appliedAt: new Date().toISOString() };
-      res.json({ success: true, application: app });
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: "Failed to apply" });
+      const {
+        jobId,
+        expectedSalary,
+        notes,
+        tutorName,
+        tutorPhone,
+        tutorEmail,
+        university,
+        department,
+        gender,
+        tutoringExperience
+      } = req.body;
+
+      if (!jobId) {
+        return res.status(400).json({ error: "Job ID is required" });
+      }
+
+      // 1. Identify user from cookie/bearer token if present
+      let tokenUser: any = null;
+      let token = req.cookies?.tutorlink_auth_token;
+      if (req.headers.authorization?.startsWith('Bearer ')) {
+        token = req.headers.authorization.substring(7);
+      }
+      if (token) {
+        tokenUser = verifyToken(token);
+      }
+
+      const applicantName = tutorName || tokenUser?.name || 'Applicant Tutor';
+      const applicantPhone = tutorPhone || tokenUser?.phone || '01700000000';
+      const applicantEmail = tutorEmail || tokenUser?.email || `${applicantPhone}@tutorlink.com`;
+      const applicantUni = university || tokenUser?.university || 'Dhaka University';
+      const applicantDept = department || 'General';
+
+      // 2. CHECK IF TUTOR IS BLOCKED! If blocked, reject application.
+      const matchedMock = mockTutors.find((m: any) => 
+        (tokenUser?.id && (m.id === tokenUser.id || m.tutorCode === tokenUser.id || m.userId === tokenUser.id)) ||
+        (applicantPhone && m.phone === applicantPhone)
+      );
+      if (matchedMock && (matchedMock.status === 'blocked' || matchedMock.status === 'suspended')) {
+        return res.status(403).json({ 
+          error: "Your tutor account is suspended or blocked by the administrator. You cannot apply for tuition jobs. Please contact support." 
+        });
+      }
+
+      // 3. Persist to DB if possible (resilient fallback to in-memory)
+      const salaryVal = expectedSalary ? parseInt(expectedSalary.toString().replace(/[^0-9]/g, '')) : null;
+      let appResult: any = null;
+      let tutorId: string = matchedMock?.id || `TT-${Math.floor(10000 + Math.random() * 90000)}`;
+
+      try {
+        let profileId: string;
+        const existingProfiles = await db.select().from(profiles).where(eq(profiles.phone, applicantPhone)).limit(1);
+        if (existingProfiles.length > 0) {
+          profileId = existingProfiles[0].id;
+          await db.update(profiles).set({
+            fullName: applicantName,
+            email: applicantEmail,
+            updatedAt: new Date()
+          }).where(eq(profiles.id, profileId));
+        } else {
+          const [newProf] = await db.insert(profiles).values({
+            fullName: applicantName,
+            phone: applicantPhone,
+            email: applicantEmail,
+            accountStatus: 'active'
+          }).returning();
+          profileId = newProf.id;
+        }
+
+        const existingTutors = await db.select().from(tutorProfiles).where(eq(tutorProfiles.userId, profileId)).limit(1);
+        if (existingTutors.length > 0) {
+          if (existingTutors[0].status === 'blocked') {
+            return res.status(403).json({ 
+              error: "Your tutor account is suspended or blocked by the administrator. You cannot apply for tuition jobs. Please contact support." 
+            });
+          }
+          tutorId = existingTutors[0].id;
+        }
+
+        const dbTuitions = await db.select().from(tuitionRequests)
+          .where(sql`${tuitionRequests.id}::text = ${jobId} OR ${tuitionRequests.jobCode} = ${jobId}`).limit(1);
+
+        if (dbTuitions.length > 0) {
+          const tuitionDbId = dbTuitions[0].id;
+          const existingApps = await db.select().from(tutorApplications)
+            .where(sql`${tutorApplications.tuitionId} = ${tuitionDbId} AND ${tutorApplications.tutorId} = ${tutorId}`).limit(1);
+
+          if (existingApps.length > 0) {
+            [appResult] = await db.update(tutorApplications).set({
+              applicationMessage: notes || existingApps[0].applicationMessage,
+              expectedSalary: salaryVal || existingApps[0].expectedSalary,
+              updatedAt: new Date()
+            }).where(eq(tutorApplications.id, existingApps[0].id)).returning();
+          } else {
+            [appResult] = await db.insert(tutorApplications).values({
+              tuitionId: tuitionDbId,
+              tutorId: tutorId,
+              applicationMessage: notes || 'Experienced tutor interested in this tuition job.',
+              expectedSalary: salaryVal,
+              status: 'submitted',
+              appliedAt: new Date()
+            }).returning();
+          }
+        }
+      } catch (dbErr: any) {
+        console.warn("DB apply sync note (using in-memory store):", dbErr?.message);
+      }
+
+      // Sync mock tuition and mockApplications state in-memory as well
+      const tutorObj = matchedMock || {
+        id: tutorId,
+        tutorCode: `TT-${Math.floor(10000 + Math.random() * 90000)}`,
+        name: applicantName,
+        fullName: applicantName,
+        phone: applicantPhone,
+        email: applicantEmail,
+        university: applicantUni,
+        department: applicantDept,
+        gender: gender || 'Any',
+        district: 'Dhaka',
+        area: 'Dhaka',
+        tutoringExperience: tutoringExperience ? parseInt(tutoringExperience.toString()) : 2,
+        status: 'active'
+      };
+
+      const newMockApp = {
+        id: 'APP-' + Date.now(),
+        tuitionId: jobId,
+        tutorId: tutorObj.id || tutorObj.tutorCode,
+        tutorCode: tutorObj.tutorCode || tutorObj.id,
+        name: tutorObj.fullName || tutorObj.name,
+        phone: tutorObj.phone || applicantPhone,
+        email: tutorObj.email || applicantEmail,
+        gender: tutorObj.gender || 'Any',
+        university: tutorObj.university || applicantUni,
+        department: tutorObj.department || applicantDept,
+        studentId: tutorObj.studentId || 'N/A',
+        academicYear: tutorObj.academicYear || '3rd Year',
+        district: tutorObj.district || 'Dhaka',
+        area: tutorObj.area || 'Dhaka',
+        experience: tutorObj.tutoringExperience ? `${tutorObj.tutoringExperience} years` : '2+ years',
+        mediums: tutorObj.mediums || ['Bangla Medium', 'English Version'],
+        subjects: tutorObj.subjects || ['All Subjects'],
+        verificationStatus: tutorObj.verificationStatus || 'verified',
+        status: tutorObj.status || 'active',
+        expectedSalary: salaryVal,
+        message: notes || 'Dedicated tutor ready to help the student excel.',
+        appliedAt: new Date().toISOString()
+      };
+      mockApplications.unshift(newMockApp);
+
+      const mock = mockTuitions.find((m: any) => m.id === jobId || m.jobCode === jobId);
+      if (mock) {
+        mock.applications = (mock.applications || 0) + 1;
+        if (mock.status === 'OPEN') mock.status = 'TEACHERS_APPLIED';
+      }
+
+      // 4. Trigger Teacher Application Alert for Admin
+      const newAlert = {
+        id: 'ALERT-' + Date.now(),
+        jobId: jobId,
+        jobTitle: mock?.title || 'Tuition Job ' + jobId,
+        tutorId: tutorObj.id || tutorObj.tutorCode,
+        tutorName: tutorObj.fullName || tutorObj.name,
+        tutorUniversity: tutorObj.university || applicantUni,
+        tutorDepartment: tutorObj.department || applicantDept,
+        expectedSalary: salaryVal,
+        timestamp: new Date().toISOString(),
+        isRead: false
+      };
+      mockTeacherAlerts.unshift(newAlert);
+
+      try {
+        await db.update(tuitionRequests).set({
+          status: sql`CASE WHEN lower(${tuitionRequests.status}) = 'open' THEN 'TEACHERS_APPLIED' ELSE ${tuitionRequests.status} END`,
+          updatedAt: new Date()
+        }).where(sql`${tuitionRequests.id}::text = ${jobId} OR ${tuitionRequests.jobCode} = ${jobId}`);
+      } catch (dbUpdateErr) {}
+
+      res.json({ 
+        success: true, 
+        application: appResult || newMockApp,
+        totalApplications: mock ? mock.applications : 1,
+        jobId,
+        alert: newAlert
+      });
+    } catch (e: any) {
+      console.error("Apply error:", e);
+      res.status(500).json({ error: e.message || "Failed to apply" });
     }
+  });
+
+  // Admin Teacher Applications Alerts API
+  app.get("/api/admin/teacher-applications/alerts", async (_req, res) => {
+    res.json({
+      alerts: mockTeacherAlerts,
+      unreadCount: mockTeacherAlerts.filter(a => !a.isRead).length
+    });
+  });
+
+  app.post("/api/admin/teacher-applications/alerts/:id/dismiss", async (req, res) => {
+    const { id } = req.params;
+    mockTeacherAlerts = mockTeacherAlerts.filter(a => a.id !== id);
+    res.json({ success: true, alerts: mockTeacherAlerts });
+  });
+
+  app.post("/api/admin/teacher-applications/alerts/clear", async (_req, res) => {
+    mockTeacherAlerts = [];
+    res.json({ success: true, alerts: [] });
   });
 
   app.get("/api/admin/tuitions/:id/applications", async (req, res) => {
     try {
-      const applications = await db.select({
-        app: tutorApplications,
-        tutor: tutorProfiles
-      })
-      .from(tutorApplications)
-      .leftJoin(tutorProfiles, eq(tutorApplications.tutorId, tutorProfiles.id))
-      .where(sql`${tutorApplications.tuitionId}::text = ${req.params.id}`);
-      
-      const formatted = (applications as any[]).map(a => ({
-        id: a.tutor?.id,
-        name: a.tutor?.fullName,
-        university: a.tutor?.university || '',
-        department: a.tutor?.department || '',
-        message: a.app.applicationMessage,
-        expectedSalary: a.app.expectedSalary
-      }));
-      
-      if (formatted.length > 0) {
-        return res.json(formatted);
+      const idParam = req.params.id;
+      const mockT = mockTuitions.find((m: any) => m.id === idParam || m.jobCode === idParam || m.realId === idParam);
+      const possibleIds = new Set<string>([idParam]);
+      if (mockT) {
+        if (mockT.id) possibleIds.add(mockT.id);
+        if (mockT.jobCode) possibleIds.add(mockT.jobCode);
+        if (mockT.realId) possibleIds.add(mockT.realId);
       }
-      res.json([
-        { id: 'TUT-1001', name: 'Muntasir Mamun', university: 'BUET', department: 'CSE', message: 'Experienced tutor', expectedSalary: 5000 },
-        { id: 'TUT-1002', name: 'Sadia Rahman', university: 'DU', department: 'IBA', message: 'Available for demo', expectedSalary: 4000 },
-      ]);
+
+      let formatted: any[] = [];
+      try {
+        const applications = await db.select({
+          app: tutorApplications,
+          tutor: tutorProfiles,
+          profile: profiles
+        })
+        .from(tutorApplications)
+        .leftJoin(tutorProfiles, eq(tutorApplications.tutorId, tutorProfiles.id))
+        .leftJoin(profiles, eq(tutorProfiles.userId, profiles.id))
+        .leftJoin(tuitionRequests, eq(tutorApplications.tuitionId, tuitionRequests.id))
+        .where(sql`${tutorApplications.tuitionId}::text = ANY(${Array.from(possibleIds)}) OR ${tuitionRequests.jobCode} = ANY(${Array.from(possibleIds)}) OR ${tuitionRequests.id}::text = ANY(${Array.from(possibleIds)})`);
+        
+        formatted = (applications as any[]).map(a => ({
+          id: a.app.id,
+          tutorId: a.tutor?.id,
+          tutorCode: a.tutor?.tutorCode || `TT-${a.tutor?.id?.substring(0, 4) || '1001'}`,
+          name: a.tutor?.fullName || a.profile?.fullName || 'Registered Tutor',
+          phone: a.profile?.phone || '017XXXXXXXX',
+          email: a.profile?.email || 'tutor@tutorlink.com',
+          gender: a.tutor?.gender || 'Any',
+          university: a.tutor?.university || 'University Student',
+          department: a.tutor?.department || 'Department',
+          studentId: a.tutor?.studentId || 'N/A',
+          academicYear: a.tutor?.academicYear || '3rd Year',
+          district: a.tutor?.district || 'Dhaka',
+          area: a.tutor?.area || 'Dhaka',
+          experience: a.tutor?.tutoringExperience ? `${a.tutor.tutoringExperience} years` : '2+ years',
+          mediums: a.tutor?.mediums || ['Bangla Medium', 'English Version'],
+          subjects: a.tutor?.subjects || ['All Subjects'],
+          verificationStatus: a.tutor?.verificationStatus || 'verified',
+          status: a.tutor?.status || 'active',
+          message: a.app.applicationMessage || 'Dedicated tutor ready to help the student excel.',
+          expectedSalary: a.app.expectedSalary,
+          appliedAt: a.app.appliedAt
+        }));
+      } catch (dbErr) {
+        console.warn("DB applications query fallback:", dbErr);
+      }
+
+      // Check mock applications and combine
+      const mockMatches = mockApplications.filter((a: any) => 
+        possibleIds.has(a.tuitionId) || 
+        (a.jobCode && possibleIds.has(a.jobCode))
+      );
+
+      // De-duplicate applications by id or tutorId
+      const seen = new Set<string>();
+      const combined: any[] = [];
+      for (const app of [...mockMatches, ...formatted]) {
+        const key = app.id || `${app.tutorId || app.name}-${app.tuitionId}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          combined.push(app);
+        }
+      }
+
+      res.json(combined);
     } catch (e) {
-      res.json([
-        { id: 'TUT-1001', name: 'Muntasir Mamun', university: 'BUET', department: 'CSE', message: 'Experienced tutor', expectedSalary: 5000 },
-        { id: 'TUT-1002', name: 'Sadia Rahman', university: 'DU', department: 'IBA', message: 'Available for demo', expectedSalary: 4000 },
-      ]);
+      console.error(e);
+      const mockMatches = mockApplications.filter((a: any) => 
+        a.tuitionId === req.params.id || 
+        a.jobCode === req.params.id
+      );
+      res.json(mockMatches);
     }
   });
 
@@ -517,6 +1368,9 @@ async function startServer() {
       const pendingCount = (allT as any[]).filter((t: any) => t.status === 'pending_review' || t.status === 'PENDING_REVIEW' || t.status === 'draft').length;
       const openCount = (allT as any[]).filter((t: any) => t.status === 'open' || t.status === 'OPEN').length;
       
+      const teacherAlertsCount = mockTeacherAlerts.length;
+      const unreadAlertsCount = mockTeacherAlerts.filter(a => !a.isRead).length;
+
       res.json({
         metrics: {
           totalTuitions: Math.max(allT.length, mockTuitions.length),
@@ -527,13 +1381,30 @@ async function startServer() {
           demosToday: 2,
           confirmedMonth: 5,
           revenue: 15000,
-          pendingPayments: 3
+          pendingPayments: 3,
+          teacherAlerts: teacherAlertsCount,
+          unreadTeacherAlerts: unreadAlertsCount
         },
         logs: []
       });
     } catch(e) {
       res.json({
-        metrics: { totalTuitions: mockTuitions.length, activeTuitions: mockTuitions.filter((t: any) => t.status === 'OPEN').length, totalGuardians: mockGuardians.length, revenue: 15000, pendingDemos: 2, pendingVerifications: 0, pendingRequests: mockTuitions.filter((t: any) => t.status === 'PENDING_REVIEW').length, tutors: mockTutors.length, guardians: mockGuardians.length, confirmedMonth: 5, demosToday: 2, pendingPayments: 3 },
+        metrics: { 
+          totalTuitions: mockTuitions.length, 
+          activeTuitions: mockTuitions.filter((t: any) => t.status === 'OPEN').length, 
+          totalGuardians: mockGuardians.length, 
+          revenue: 15000, 
+          pendingDemos: 2, 
+          pendingVerifications: 0, 
+          pendingRequests: mockTuitions.filter((t: any) => t.status === 'PENDING_REVIEW').length, 
+          tutors: mockTutors.length, 
+          guardians: mockGuardians.length, 
+          confirmedMonth: 5, 
+          demosToday: 2, 
+          pendingPayments: 3,
+          teacherAlerts: mockTeacherAlerts.length,
+          unreadTeacherAlerts: mockTeacherAlerts.filter(a => !a.isRead).length
+        },
         logs: []
       });
     }
@@ -593,46 +1464,226 @@ async function startServer() {
     }
   });
 
-  app.patch("/api/admin/tuitions/:id/status", async (req, res) => {
+  const handleAdminStatusUpdate = async (req: any, res: any) => {
     try {
       const { id } = req.params;
-      const { targetStatus, archiveReason } = req.body;
+      const { targetStatus, status, archiveReason, cancelReason } = req.body;
+      const effectiveStatus = (targetStatus || status || '').toUpperCase();
       
       const mockIdx = mockTuitions.findIndex((t: any) => t.id === id || t.jobCode === id);
       if (mockIdx >= 0) {
-        mockTuitions[mockIdx].status = targetStatus;
+        mockTuitions[mockIdx].status = effectiveStatus;
         if (archiveReason) mockTuitions[mockIdx].adminNotes = archiveReason;
+        if (cancelReason) mockTuitions[mockIdx].adminNotes = cancelReason;
       }
       
-      let mappedStatus = targetStatus.toLowerCase();
-      if (targetStatus === 'OPEN') mappedStatus = 'open';
-      if (targetStatus === 'CONFIRMED') mappedStatus = 'assigned';
-      if (targetStatus === 'ARCHIVED' || targetStatus === 'CANCELLED') mappedStatus = 'cancelled';
-      if (targetStatus === 'PENDING_REVIEW') mappedStatus = 'pending_review';
+      let mappedStatus = 'open';
+      if (effectiveStatus === 'OPEN') mappedStatus = 'open';
+      else if (effectiveStatus === 'CONFIRMED' || effectiveStatus === 'FILLED') mappedStatus = 'assigned';
+      else if (effectiveStatus === 'ARCHIVED' || effectiveStatus === 'CLOSED') mappedStatus = 'cancelled';
+      else if (effectiveStatus === 'CANCELLED') mappedStatus = 'cancelled';
+      else if (effectiveStatus === 'PENDING_REVIEW' || effectiveStatus === 'PENDING') mappedStatus = 'pending_review';
+      else mappedStatus = effectiveStatus.toLowerCase();
+
+      const updateData: any = {
+        status: mappedStatus,
+        updatedAt: new Date()
+      };
+      if (mappedStatus === 'open') {
+        updateData.publishedAt = new Date();
+        updateData.visibility = 'public';
+      }
 
       try {
-        await db.update(tuitionRequests).set({ status: mappedStatus }).where(sql`${tuitionRequests.id}::text = ${id} OR ${tuitionRequests.jobCode} = ${id}`);
-      } catch (err) {}
+        const updated = await db.update(tuitionRequests)
+          .set(updateData)
+          .where(sql`${tuitionRequests.id}::text = ${id} OR ${tuitionRequests.jobCode} = ${id}`)
+          .returning();
 
-      res.json({ success: true });
-    } catch (e) {
-      res.json({ success: true });
+        // If it was a mock item not yet in Supabase, persist it into Supabase now
+        if (updated.length === 0 && mockIdx >= 0) {
+          const mock = mockTuitions[mockIdx];
+          const salaryNum = parseInt(mock.salary?.toString().replace(/[^0-9]/g, '') || '4000');
+          await db.insert(tuitionRequests).values({
+            jobCode: mock.jobCode || mock.id,
+            title: mock.title,
+            curriculum: mock.curriculum || mock.category || 'General',
+            courseClass: mock.course || mock.courseClass || 'General',
+            subjects: Array.isArray(mock.subjects) ? mock.subjects : [mock.subjects || 'General'],
+            daysPerWeek: mock.daysPerWeek || '3 days',
+            preferredTime: mock.preferredTime || mock.time || 'Flexible',
+            duration: mock.duration || '1 Hour',
+            method: mock.method || 'Home Tutoring',
+            salaryMin: salaryNum,
+            salaryMax: salaryNum,
+            district: mock.district || mock.city || 'Dhaka',
+            area: mock.area || mock.location || 'Dhaka',
+            fullAddress: mock.fullAddress || mock.location || 'Dhaka',
+            parentSpecialInstructions: mock.notes || '',
+            studentGender: mock.studentGender || 'Mix',
+            preferredTutorGender: mock.preferredTutorGender || mock.tutorGender || 'Any',
+            studentCount: parseInt(mock.studentCount?.toString() || '1') || 1,
+            status: mappedStatus,
+            visibility: 'public',
+            publishedAt: mappedStatus === 'open' ? new Date() : null,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+        }
+      } catch (err) {
+        console.error("DB update status error:", err);
+      }
+
+      res.json({ success: true, status: effectiveStatus, dbStatus: mappedStatus });
+    } catch (e: any) {
+      console.error(e);
+      res.status(500).json({ error: e.message || "Failed to update status" });
+    }
+  };
+
+  app.put("/api/admin/tuitions/:id/status", handleAdminStatusUpdate);
+  app.patch("/api/admin/tuitions/:id/status", handleAdminStatusUpdate);
+
+  app.post("/api/admin/tuitions", async (req, res) => {
+    try {
+      const formData = req.body;
+      const salaryNum = parseInt(formData.salary?.toString().replace(/[^0-9]/g, '') || '0') || 0;
+      const studentCountNum = parseInt(formData.studentsCount?.toString() || '1') || 1;
+      const jobCode = 'JOB-' + Math.floor(100000 + Math.random() * 900000);
+
+      let guardianId = null;
+      if (formData.guardianPhone) {
+        try {
+          const existingG = await db.select().from(guardianProfiles).where(eq(guardianProfiles.phone, formData.guardianPhone)).limit(1);
+          if (existingG.length > 0) {
+            guardianId = existingG[0].id;
+          } else {
+            const [newG] = await db.insert(guardianProfiles).values({
+              fullName: formData.guardianName || 'Guardian',
+              phone: formData.guardianPhone,
+              address: formData.fullAddress || formData.location || '',
+              district: formData.city || formData.district || 'Dhaka',
+              area: formData.area || ''
+            }).returning();
+            guardianId = newG?.id;
+          }
+        } catch (gErr) {
+          console.error("Guardian profile err:", gErr);
+        }
+      }
+
+      const subjectsArray = Array.isArray(formData.subjects) 
+        ? formData.subjects 
+        : (typeof formData.subjects === 'string' ? formData.subjects.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
+
+      const initialStatus = (formData.status || 'OPEN').toUpperCase();
+      const mappedDbStatus = initialStatus === 'OPEN' ? 'open' : (initialStatus === 'PENDING_REVIEW' ? 'pending_review' : 'open');
+
+      const [inserted] = await db.insert(tuitionRequests).values({
+        jobCode,
+        guardianId,
+        title: formData.title || `Need tutor for ${formData.course || ''} - ${subjectsArray.join(', ')}`,
+        curriculum: formData.curriculum || formData.category || 'General',
+        courseClass: formData.course || formData.courseClass || '',
+        subjects: subjectsArray,
+        daysPerWeek: formData.daysPerWeek || '3 days/week',
+        preferredTime: formData.time || 'Flexible',
+        duration: formData.duration || '1 Hour',
+        method: formData.method || 'Home Tutoring',
+        salaryMin: salaryNum,
+        salaryMax: salaryNum,
+        country: formData.country || 'Bangladesh',
+        district: formData.city || formData.district || 'Dhaka',
+        area: formData.area || formData.location || '',
+        fullAddress: formData.fullAddress || formData.location || '',
+        parentSpecialInstructions: formData.notes || '',
+        studentGender: formData.studentGender || 'Mix',
+        preferredTutorGender: formData.tutorGender || 'Any',
+        studentCount: studentCountNum,
+        status: mappedDbStatus,
+        visibility: 'public',
+        publishedAt: mappedDbStatus === 'open' ? new Date() : null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }).returning();
+
+      const mapped = mapTuitionToOld({
+        ...inserted,
+        guardianName: formData.guardianName || 'Guardian',
+        guardianPhone: formData.guardianPhone || '',
+        appCount: 0
+      });
+
+      mockTuitions.unshift(mapped);
+      res.json(mapped);
+    } catch (err: any) {
+      console.error("Create tuition error:", err);
+      res.status(500).json({ error: err.message || "Failed to create tuition" });
     }
   });
 
   app.put("/api/admin/tutors/:id/edit", async (req, res) => {
     try {
       const { id } = req.params;
-      const { name, university, phone } = req.body;
+      const { name, university, phone, department, district, status } = req.body;
       const mockIdx = mockTutors.findIndex((t: any) => t.id === id || t.tutorCode === id);
       if (mockIdx >= 0) {
         if (name) mockTutors[mockIdx].fullName = name;
         if (university) mockTutors[mockIdx].university = university;
         if (phone) mockTutors[mockIdx].phone = phone;
+        if (department) mockTutors[mockIdx].department = department;
+        if (district) mockTutors[mockIdx].district = district;
+        if (status) mockTutors[mockIdx].status = status;
       }
-      res.json({ success: true });
+      res.json({ success: true, tutor: mockIdx >= 0 ? mapTutorToOld(mockTutors[mockIdx]) : null });
     } catch (e) {
       res.json({ success: true });
+    }
+  });
+
+  // Admin Block / Unblock / Verify Tutor
+  app.put("/api/admin/tutors/:id/status", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, verified, verificationStatus } = req.body;
+      
+      const mockIdx = mockTutors.findIndex((t: any) => t.id === id || t.tutorCode === id);
+      if (mockIdx >= 0) {
+        if (status) mockTutors[mockIdx].status = status;
+        if (verified !== undefined) {
+          mockTutors[mockIdx].verified = verified;
+          mockTutors[mockIdx].verificationStatus = verified ? 'verified' : 'pending';
+          mockTutors[mockIdx].nidStatus = verified ? 'Verified (NID Provided)' : 'Pending Verification';
+        }
+        if (verificationStatus) {
+          mockTutors[mockIdx].verificationStatus = verificationStatus;
+          mockTutors[mockIdx].verified = verificationStatus === 'verified';
+        }
+      }
+
+      // Also sync mockApplications if present
+      mockApplications.forEach((a: any) => {
+        if (a.tutorId === id || a.tutorCode === id) {
+          if (status) a.status = status;
+          if (verified !== undefined) a.verificationStatus = verified ? 'verified' : 'pending';
+        }
+      });
+
+      try {
+        await db.update(tutorProfiles).set({
+          status: status || undefined,
+          verificationStatus: verified !== undefined ? (verified ? 'verified' : 'pending') : verificationStatus || undefined,
+          updatedAt: new Date()
+        }).where(sql`${tutorProfiles.id}::text = ${id} OR ${tutorProfiles.tutorCode} = ${id}`);
+      } catch (err) {}
+
+      res.json({ 
+        success: true, 
+        status: status || (mockIdx >= 0 ? mockTutors[mockIdx].status : 'active'),
+        verified: mockIdx >= 0 ? mockTutors[mockIdx].verified : true
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Failed to update tutor status" });
     }
   });
 
@@ -684,8 +1735,12 @@ async function startServer() {
 
   app.get("/api/admin/tutors", async (_req, res) => {
     try {
-      const all = await db.select().from(tutorsTable);
-      res.json(all.map(mapTutorToOld));
+      const all = await db.select().from(tutorProfiles);
+      if (all && all.length > 0) {
+        res.json(all.map(mapTutorToOld));
+      } else {
+        res.json(getMockTutors());
+      }
     } catch (e) {
       res.json(getMockTutors());
     }

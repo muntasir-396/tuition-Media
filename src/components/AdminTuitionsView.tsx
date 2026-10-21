@@ -6,17 +6,18 @@ import { Plus } from "lucide-react";
 import { 
   CheckCircle, Edit, MapPin, DollarSign, Activity, 
   RefreshCw, XCircle, Users, Calendar, Search, 
-  CreditCard, Archive, Clock, Eye
+  CreditCard, Archive, Clock, Eye, Bell
 } from 'lucide-react';
 
 
 export const AdminTuitionsView: React.FC = () => {
-  const { setActiveTab: setGlobalActiveTab, setAdminSelectedTuitionId } = useApp();
-  const [activeTab, setActiveTab] = useState('All');
+  const { setActiveTab: setGlobalActiveTab, setAdminSelectedTuitionId, adminTuitionsInitialTab, setAdminTuitionsInitialTab } = useApp();
+  const [activeTab, setActiveTab] = useState(adminTuitionsInitialTab || 'All');
   const [confirmModalData, setConfirmModalData] = useState<{id: string, tutorId: string} | null>(null);
   const [actualPayment, setActualPayment] = useState('5000');
   const [tuitions, setTuitions] = useState<any[]>([]);
   const [allTuitionsData, setAllTuitionsData] = useState<any[]>([]);
+  const [teacherAlerts, setTeacherAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   
@@ -29,6 +30,11 @@ export const AdminTuitionsView: React.FC = () => {
   const [selectedTuition, setSelectedTuition] = useState<any>(null);
   const [isCreateMode, setIsCreateMode] = useState(false);
 
+  useEffect(() => {
+    if (adminTuitionsInitialTab) {
+      setActiveTab(adminTuitionsInitialTab);
+    }
+  }, [adminTuitionsInitialTab]);
 
   const TABS = [
     { label: 'All', value: 'ALL' },
@@ -40,46 +46,86 @@ export const AdminTuitionsView: React.FC = () => {
     { label: 'Cancelled', value: 'CANCELLED' }
   ];
 
-  // Initialize and load from local storage
-  
-  
-  useEffect(() => {
-    const fetchTuitions = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch(`/api/admin/tuitions?t=${Date.now()}`);
+  const fetchTeacherAlerts = async () => {
+    try {
+      const response = await fetch('/api/admin/teacher-applications/alerts');
+      if (response.ok) {
         const data = await response.json();
-        
-        if (response.ok && Array.isArray(data)) {
-          const mappedTuitions = data.map((job: any) => ({
-            id: job.id,
-            title: job.title || 'Tuition Job',
-            curriculum: job.course || 'Any',
-            salary: job.salary || 0,
-            location: job.location || 'Negotiable',
-            schedule: job.daysPerWeek || '3 days/week',
-            guardianName: job.guardianName || 'Guest Guardian',
-            guardianPhone: job.guardianPhone || 'N/A',
-            status: job.status || 'OPEN',
-            postedAt: job.postedAt
-          }));
-
-          setAllTuitionsData(mappedTuitions);
-        } else {
-          setAllTuitionsData([]);
+        if (Array.isArray(data.alerts)) {
+          setTeacherAlerts(data.alerts);
         }
-      } catch (e) {
-        console.error("Error fetching tuitions:", e);
-        setAllTuitionsData([]);
-      } finally {
-        setLoading(false);
       }
+    } catch (e) {}
+  };
+
+  const handleDismissAlert = async (alertId: string) => {
+    try {
+      await fetch(`/api/admin/teacher-applications/alerts/${alertId}/dismiss`, { method: 'POST' });
+      setTeacherAlerts(prev => prev.filter(a => a.id !== alertId));
+    } catch (e) {}
+  };
+
+  const handleClearAllAlerts = async () => {
+    try {
+      await fetch('/api/admin/teacher-applications/alerts/clear', { method: 'POST' });
+      setTeacherAlerts([]);
+    } catch (e) {}
+  };
+
+  const fetchTuitions = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/admin/tuitions?t=${Date.now()}`);
+      const data = await response.json();
+      
+      if (response.ok && Array.isArray(data)) {
+        const mappedTuitions = data.map((job: any) => ({
+          id: job.id,
+          realId: job.realId || job.id,
+          jobCode: job.jobCode || job.id,
+          title: job.title || 'Tuition Job',
+          curriculum: job.course || job.curriculum || 'Any',
+          course: job.course || 'Any',
+          salary: job.salary || 0,
+          location: job.location || job.fullAddress || job.area || 'Negotiable',
+          area: job.area || job.location || '',
+          schedule: job.daysPerWeek || '3 days/week',
+          daysPerWeek: job.daysPerWeek || '3 days/week',
+          guardianName: job.guardianName || 'Guest Guardian',
+          guardianPhone: job.guardianPhone || 'N/A',
+          status: job.status || 'OPEN',
+          applications: job.applications !== undefined ? Number(job.applications) : Number(job.appCount || 0),
+          postedAt: job.postedAt || job.createdAt,
+          demoSchedule: job.demoSchedule,
+          assignedTutorId: job.assignedTutorId,
+          paymentRecord: job.paymentRecord,
+          adminNotes: job.adminNotes
+        }));
+
+        setAllTuitionsData(mappedTuitions);
+      } else {
+        setAllTuitionsData([]);
+      }
+    } catch (e) {
+      console.error("Error fetching tuitions:", e);
+      setAllTuitionsData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTuitions();
+    fetchTeacherAlerts();
+
+    const handleRealtimeApplied = () => {
+      fetchTuitions();
+      fetchTeacherAlerts();
     };
 
-    fetchTuitions();
+    window.addEventListener('tutorlink:job-applied', handleRealtimeApplied);
+    return () => window.removeEventListener('tutorlink:job-applied', handleRealtimeApplied);
   }, []);
-
-
 
   // Filter Data locally
   useEffect(() => {
@@ -91,7 +137,7 @@ export const AdminTuitionsView: React.FC = () => {
     if (activeTabValue !== 'ALL') {
       if (activeTabValue === 'PENDING') filtered = filtered.filter(t => t.status === 'PENDING_REVIEW');
       else if (activeTabValue === 'OPEN') filtered = filtered.filter(t => t.status === 'OPEN');
-      else if (activeTabValue === 'APPLIED') filtered = filtered.filter(t => t.status === 'TEACHERS_APPLIED');
+      else if (activeTabValue === 'APPLIED') filtered = filtered.filter(t => t.status === 'TEACHERS_APPLIED' || (t.applications && t.applications > 0));
       else if (activeTabValue === 'CONFIRMED') filtered = filtered.filter(t => ['CONFIRMED', 'FILLED'].includes(t.status));
       else if (activeTabValue === 'ARCHIVED') filtered = filtered.filter(t => ['CLOSED', 'ARCHIVED'].includes(t.status));
       else if (activeTabValue === 'CANCELLED') filtered = filtered.filter(t => t.status === 'CANCELLED');
@@ -122,7 +168,7 @@ export const AdminTuitionsView: React.FC = () => {
       const response = await fetch(`/api/admin/tuitions/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: targetStatus, ...extraPayload })
+        body: JSON.stringify({ status: targetStatus, targetStatus, ...extraPayload })
       });
       if (response.ok) {
         const updatedData = allTuitionsData.map(t => {
@@ -131,7 +177,8 @@ export const AdminTuitionsView: React.FC = () => {
           }
           return t;
         });
-        setAllTuitionsData(updatedData);
+        saveToStorage(updatedData);
+        alert(`Success: Tuition status updated to ${targetStatus}!`);
       } else {
         alert('Failed to update status on server');
       }
@@ -180,29 +227,51 @@ export const AdminTuitionsView: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
-  const handleSaveModal = (formData: any) => {
+  const handleSaveModal = async (formData: any) => {
     if (isCreateMode) {
-      const newId = `JOB-${Math.floor(100000 + Math.random() * 900000)}`;
-      const newTuition = {
-        ...formData,
-        id: newId,
-        status: formData.status || "OPEN",
-        postedAt: new Date().toISOString(),
-        createdAt: new Date().toISOString()
-      };
-      saveToStorage([newTuition, ...allTuitionsData]);
-      
-      // Auto-switch to view it based on status
-      const statusLabel = TABS.find(t => {
-        if (newTuition.status === 'PENDING_REVIEW' && t.value === 'PENDING') return true;
-        if (newTuition.status === 'TEACHERS_APPLIED' && t.value === 'APPLIED') return true;
-        if (t.value === newTuition.status) return true;
-        return false;
-      })?.label || 'All';
-      
-      setActiveTab(statusLabel);
-      alert('Success: New tuition created successfully!');
+      try {
+        const response = await fetch('/api/admin/tuitions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...formData,
+            status: formData.status || 'OPEN'
+          })
+        });
+
+        if (response.ok) {
+          const created = await response.json();
+          saveToStorage([created, ...allTuitionsData]);
+          setActiveTab('Open');
+          alert('Success: New tuition created and published to Tuition Jobs!');
+        } else {
+          // Fallback locally
+          const newId = `JOB-${Math.floor(100000 + Math.random() * 900000)}`;
+          const newTuition = {
+            ...formData,
+            id: newId,
+            status: formData.status || "OPEN",
+            postedAt: new Date().toISOString(),
+            createdAt: new Date().toISOString()
+          };
+          saveToStorage([newTuition, ...allTuitionsData]);
+          setActiveTab('Open');
+          alert('Success: New tuition created!');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Error creating tuition');
+      }
     } else {
+      try {
+        await fetch(`/api/admin/tuitions/${formData.id}/edit`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+      } catch (err) {
+        console.error(err);
+      }
       const updatedData = allTuitionsData.map(t => {
         if (t.id === formData.id) return { ...formData, updatedAt: new Date().toISOString() };
         return t;
@@ -233,21 +302,121 @@ export const AdminTuitionsView: React.FC = () => {
 
       {/* Filter Pill Controls */}
       <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
-        {TABS.map(tab => (
-          <button
-            key={tab.label}
-            onClick={() => setActiveTab(tab.label)}
-            className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
-              activeTab === tab.label 
-                ? 'bg-slate-900 text-white' 
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+        {TABS.map(tab => {
+          let tabCount = 0;
+          if (tab.value === 'ALL') tabCount = allTuitionsData.length;
+          else if (tab.value === 'PENDING') tabCount = allTuitionsData.filter(t => t.status === 'PENDING_REVIEW').length;
+          else if (tab.value === 'OPEN') tabCount = allTuitionsData.filter(t => t.status === 'OPEN').length;
+          else if (tab.value === 'APPLIED') tabCount = allTuitionsData.filter(t => t.status === 'TEACHERS_APPLIED' || (t.applications && t.applications > 0)).length;
+          else if (tab.value === 'CONFIRMED') tabCount = allTuitionsData.filter(t => ['CONFIRMED', 'FILLED'].includes(t.status)).length;
+          else if (tab.value === 'ARCHIVED') tabCount = allTuitionsData.filter(t => ['CLOSED', 'ARCHIVED'].includes(t.status)).length;
+          else if (tab.value === 'CANCELLED') tabCount = allTuitionsData.filter(t => t.status === 'CANCELLED').length;
 
+          const isAppliedTab = tab.value === 'APPLIED';
+          const hasUnreadAlerts = isAppliedTab && teacherAlerts.some(a => !a.isRead);
+
+          return (
+            <button
+              key={tab.label}
+              onClick={() => setActiveTab(tab.label)}
+              className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
+                activeTab === tab.label 
+                  ? 'bg-slate-900 text-white' 
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                activeTab === tab.label ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+              }`}>
+                {tabCount}
+              </span>
+              {hasUnreadAlerts && (
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
+
+      {/* Teacher Applications Alert Section Banner */}
+      {teacherAlerts.length > 0 && (activeTab === 'Teachers Applied' || activeTab === 'All') && (
+        <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-blue-50 border-2 border-indigo-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-xs">
+                  <Bell className="w-5 h-5 animate-bounce" />
+                </div>
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
+                </span>
+              </div>
+              <div>
+                <h4 className="text-sm sm:text-base font-extrabold text-indigo-950 flex items-center gap-2">
+                  <span>Teacher Applications Alert</span>
+                  <span className="px-2 py-0.5 rounded-full bg-indigo-600 text-white text-[11px] font-black">
+                    {teacherAlerts.length} New
+                  </span>
+                </h4>
+                <p className="text-xs text-indigo-800 font-medium">
+                  Tutors recently applied to tuition jobs. Review credentials and assign for trial demo classes.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleClearAllAlerts}
+              className="text-xs text-slate-500 hover:text-slate-800 font-bold px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-colors cursor-pointer whitespace-nowrap"
+            >
+              Clear All Alerts
+            </button>
+          </div>
+
+          {/* Alert cards list */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            {teacherAlerts.slice(0, 4).map((alert) => (
+              <div
+                key={alert.id}
+                className="p-3 bg-white/95 rounded-xl border border-indigo-100 flex items-center justify-between gap-3 shadow-2xs hover:border-indigo-300 transition-all"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-xs text-slate-900 truncate">{alert.tutorName}</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
+                      {alert.jobId}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                    {alert.tutorUniversity} • {alert.jobTitle}
+                  </p>
+                  <span className="text-[10px] text-slate-400">
+                    {new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => viewDetails(alert.jobId)}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors cursor-pointer"
+                  >
+                    Review
+                  </button>
+                  <button
+                    onClick={() => handleDismissAlert(alert.id)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Dismiss Alert"
+                  >
+                    <XCircle className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="relative">
         <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -258,7 +427,6 @@ export const AdminTuitionsView: React.FC = () => {
           onChange={(e) => setSearch(e.target.value)}
           className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-hidden focus:border-slate-400 bg-white" 
         />
-
       </div>
 
       <div className="grid grid-cols-1 gap-4 p-4 -mx-4 sm:mx-0 sm:p-6 bg-[#F8F9FA] sm:rounded-2xl border border-slate-100">
@@ -285,12 +453,14 @@ export const AdminTuitionsView: React.FC = () => {
                 <h3 className="font-bold text-slate-900 text-base sm:text-lg">{t.title || t.subject || `${t.category} - ${t.course}`}</h3>
 
               </div>
-              <div className="flex gap-2">
-                {t.applications > 0 && t.status !== 'CONFIRMED' && t.status !== 'CLOSED' && t.status !== 'ARCHIVED' && (
-                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center gap-1">
-                    <Users className="w-3.5 h-3.5" /> {t.applications} Applicants
-                  </span>
-                )}
+              <div className="flex gap-2 items-center flex-wrap">
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-full border flex items-center gap-1 ${
+                  (t.applications || 0) > 0 
+                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200' 
+                    : 'bg-slate-50 text-slate-500 border-slate-200'
+                }`}>
+                  <Users className="w-3.5 h-3.5" /> {t.applications || 0} Applicant{(t.applications || 0) === 1 ? '' : 's'}
+                </span>
                 {t.status === 'DEMO_SCHEDULED' && (
                   <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5" /> Demo Scheduled
@@ -432,16 +602,18 @@ export const AdminTuitionsView: React.FC = () => {
                 </>
               )}
 
-              {(t.status === 'OPEN' || t.status === 'TEACHERS_APPLIED') && (
+              {(t.status === 'OPEN' || t.status === 'TEACHERS_APPLIED' || (t.applications && t.applications > 0)) && (
                 <>
-                  {t.status === 'TEACHERS_APPLIED' && (
-                    <button 
-                      onClick={() => viewDetails(t.id)}
-                      className="px-3 py-2 rounded-lg border border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-bold text-xs flex items-center gap-1.5 transition-colors"
-                    >
-                      <Users className="w-3.5 h-3.5" /> Review Applicants
-                    </button>
-                  )}
+                  <button 
+                    onClick={() => viewDetails(t.id)}
+                    className="px-3 py-2 rounded-lg border border-indigo-200 bg-indigo-50/60 text-indigo-700 hover:bg-indigo-100 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>Review Applicants</span>
+                    <span className="px-1.5 py-0.2 rounded-full bg-indigo-600 text-white text-[10px] font-black">
+                      {t.applications || 0}
+                    </span>
+                  </button>
                   <button 
                     onClick={() => handleStatusUpdate(t.id, 'DEMO_SCHEDULED', { demoDate: 'TBD' })}
                     className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-bold text-xs transition-colors"

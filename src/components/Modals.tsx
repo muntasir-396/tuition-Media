@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   X,
@@ -34,17 +34,35 @@ export const Modals: React.FC = () => {
     setSelectedCity,
     selectedMediumFilter,
     setSelectedMediumFilter,
+    currentUser,
+    isLoggedIn,
   } = useApp();
 
   const [applyNotes, setApplyNotes] = useState('');
   const [expectedSalary, setExpectedSalary] = useState('');
+  const [tutorName, setTutorName] = useState('');
+  const [tutorPhone, setTutorPhone] = useState('');
+  const [tutorUniversity, setTutorUniversity] = useState('');
+  const [tutorDepartment, setTutorDepartment] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAppliedSuccess, setIsAppliedSuccess] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  
+  const [applyError, setApplyError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currentUser) {
+      setTutorName(currentUser.name || '');
+      setTutorPhone(currentUser.phone || '');
+      setTutorUniversity(currentUser.university || '');
+    }
+  }, [currentUser]);
+
   const handleApplySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setApplyError(null);
     if (jobToApply) {
+      setIsSubmitting(true);
       try {
         const res = await fetch('/api/v1/tutor/apply', {
           method: 'POST',
@@ -52,22 +70,35 @@ export const Modals: React.FC = () => {
           body: JSON.stringify({ 
             jobId: jobToApply.id, 
             expectedSalary, 
-            notes: applyNotes 
+            notes: applyNotes,
+            tutorName: tutorName || currentUser?.name || 'Applicant Tutor',
+            tutorPhone: tutorPhone || currentUser?.phone || '01700000000',
+            university: tutorUniversity || currentUser?.university || 'University Graduate',
+            department: tutorDepartment || 'General'
           })
         });
+        
+        const data = await res.json();
+        
         if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || 'Application failed');
+          setApplyError(data.error || 'Failed to submit application. Please check your account status.');
+          setIsSubmitting(false);
+          return;
         }
-      } catch (error) {
+
+        setIsSubmitting(false);
+        applyToJob(jobToApply.id);
+        setIsAppliedSuccess(true);
+        setTimeout(() => {
+          setIsAppliedSuccess(false);
+          setIsApplyModalOpen(false);
+          setApplyError(null);
+        }, 1500);
+      } catch (error: any) {
         console.error("Failed to submit application", error);
+        setApplyError(error.message || 'Network error occurred while applying.');
+        setIsSubmitting(false);
       }
-      applyToJob(jobToApply.id);
-      setIsAppliedSuccess(true);
-      setTimeout(() => {
-        setIsAppliedSuccess(false);
-        setIsApplyModalOpen(false);
-      }, 1500);
     }
   };
 
@@ -224,6 +255,76 @@ export const Modals: React.FC = () => {
                   </p>
                 </div>
 
+                {applyError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 font-semibold flex items-start gap-2.5">
+                    <span className="text-base leading-none">⚠️</span>
+                    <div className="flex-1">
+                      <p className="font-bold text-red-900">Application Denied</p>
+                      <p className="mt-0.5 text-red-700 leading-relaxed">{applyError}</p>
+                    </div>
+                  </div>
+                )}
+
+                {isLoggedIn && currentUser ? (
+                  <div className="p-3 bg-lime-50 rounded-xl border border-lime-200 text-xs text-lime-900 flex items-center justify-between">
+                    <div>
+                      <span className="font-bold block">Applying as: {currentUser.name}</span>
+                      <span className="text-lime-700">{currentUser.university || 'Registered Tutor'} • {currentUser.phone || ''}</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-[#84CC16] text-slate-950 font-black text-[10px] uppercase">Logged In</span>
+                  </div>
+                ) : (
+                  <div className="space-y-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
+                    <p className="text-slate-500 font-semibold text-[11px]">Your Tutor Profile Info:</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-slate-500 mb-1">Full Name *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Muntasir Mamun"
+                          value={tutorName}
+                          onChange={(e) => setTutorName(e.target.value)}
+                          className="w-full p-2 rounded-lg border border-slate-200 bg-white text-xs font-medium"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-500 mb-1">Phone Number *</label>
+                        <input
+                          type="tel"
+                          required
+                          placeholder="e.g. 01712345678"
+                          value={tutorPhone}
+                          onChange={(e) => setTutorPhone(e.target.value)}
+                          className="w-full p-2 rounded-lg border border-slate-200 bg-white text-xs font-medium"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-slate-500 mb-1">University / College</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. BUET / DU / NSU"
+                          value={tutorUniversity}
+                          onChange={(e) => setTutorUniversity(e.target.value)}
+                          className="w-full p-2 rounded-lg border border-slate-200 bg-white text-xs font-medium"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-500 mb-1">Department</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. CSE / EEE / BBA"
+                          value={tutorDepartment}
+                          onChange={(e) => setTutorDepartment(e.target.value)}
+                          className="w-full p-2 rounded-lg border border-slate-200 bg-white text-xs font-medium"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-3 text-xs font-bold text-slate-700">
                   <div>
                     <label className="block text-slate-500 mb-1">Expected Monthly Remuneration (BDT):</label>
@@ -252,16 +353,17 @@ export const Modals: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setIsApplyModalOpen(false)}
-                    className="w-1/2 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs"
+                    className="w-1/2 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="w-1/2 py-2.5 rounded-xl bg-[#84CC16] text-slate-950 font-black text-xs shadow-sm flex items-center justify-center gap-1.5"
+                    disabled={isSubmitting}
+                    className="w-1/2 py-2.5 rounded-xl bg-[#84CC16] hover:bg-[#65A30D] text-slate-950 font-black text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                   >
                     <Send className="w-3.5 h-3.5 stroke-[2.5]" />
-                    <span>Confirm Application</span>
+                    <span>{isSubmitting ? 'Submitting...' : 'Confirm Application'}</span>
                   </button>
                 </div>
               </form>

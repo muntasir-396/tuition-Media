@@ -345,16 +345,16 @@ export const TutorsView: React.FC = () => {
 
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => alert(`Tutor ID: ${tutor.id}`)}
+                      onClick={() => navigateToTutorProfile(tutor.id)}
                       className="px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
                     >
-                      View Tutor
+                      Quick View
                     </button>
                     <button
                       onClick={() => navigateToTutorProfile(tutor.id)}
-                      className="px-4 py-2 rounded-xl bg-[#84CC16] hover:bg-[#65A30D] text-slate-950 font-bold text-xs shadow-2xs transition-colors cursor-pointer"
+                      className="px-4 py-2 rounded-xl bg-[#84CC16] hover:bg-[#65A30D] text-slate-950 font-black text-xs shadow-2xs transition-colors cursor-pointer"
                     >
-                      View Tutor CV
+                      View Full Profile
                     </button>
                   </div>
                 </div>
@@ -430,10 +430,10 @@ export const TutorsView: React.FC = () => {
 
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => alert(`Tutor ID: ${tutor.id}`)}
+                      onClick={() => navigateToTutorProfile(tutor.id)}
                       className="px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
                     >
-                      View Tutor
+                      Quick View
                     </button>
                     <button
                       onClick={() => navigateToTutorProfile(tutor.id)}

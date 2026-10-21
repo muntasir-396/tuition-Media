@@ -6,7 +6,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsToolti
 const COLORS = ['#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444'];
 
 export const AdminDashboardView: React.FC = () => {
-  const { setActiveTab } = useApp();
+  const { setActiveTab, setAdminTuitionsInitialTab } = useApp();
   const [metrics, setMetrics] = useState({
     tutors: 0,
     guardians: 0,
@@ -15,12 +15,20 @@ export const AdminDashboardView: React.FC = () => {
     demosToday: 0,
     confirmedMonth: 0,
     totalRevenue: 0,
-    pendingPayments: 0
+    pendingPayments: 0,
+    teacherAlerts: 0,
+    unreadTeacherAlerts: 0
   });
   const [logs, setLogs] = useState<any[]>([]);
 
   useEffect(() => {
     fetchDashboardData();
+
+    const handleRealtime = () => {
+      fetchDashboardData();
+    };
+    window.addEventListener('tutorlink:job-applied', handleRealtime);
+    return () => window.removeEventListener('tutorlink:job-applied', handleRealtime);
   }, []);
 
   const fetchDashboardData = async () => {
@@ -85,6 +93,35 @@ export const AdminDashboardView: React.FC = () => {
             className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors whitespace-nowrap cursor-pointer"
           >
             Review Applications →
+          </button>
+        </div>
+      )}
+
+      {/* Pending Teacher Applications Banner */}
+      {((metrics.teacherAlerts > 0) || (metrics.unreadTeacherAlerts > 0)) && (
+        <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-blue-50 border border-indigo-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 font-bold shadow-xs">
+              {metrics.teacherAlerts}
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-indigo-950 flex items-center gap-2">
+                <span>{metrics.teacherAlerts} Teacher Application{metrics.teacherAlerts > 1 ? 's' : ''} Awaiting Review</span>
+                <span className="px-2 py-0.5 rounded-full bg-indigo-600 text-white text-[10px] font-black uppercase tracking-wider">New Alert</span>
+              </h4>
+              <p className="text-xs text-indigo-800">
+                Qualified tutors applied for open tuition jobs. Review credentials and schedule trial demo classes.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setAdminTuitionsInitialTab?.('Teachers Applied');
+              setActiveTab('admin-tuitions');
+            }}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors whitespace-nowrap cursor-pointer"
+          >
+            Review Teacher Applications →
           </button>
         </div>
       )}
