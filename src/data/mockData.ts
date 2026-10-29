@@ -1,16 +1,16 @@
 import { TuitionJob, TutorProfile, ServiceCategory, CityMetric } from '../types';
 
 export const CITY_METRICS: CityMetric[] = [
-  { name: 'DHAKA', tutorCount: 131861 },
-  { name: 'CHITTAGONG', tutorCount: 13938 },
-  { name: 'SYLHET', tutorCount: 2504 },
-  { name: 'KHULNA', tutorCount: 1845 },
-  { name: 'GAZIPUR', tutorCount: 4210 },
-  { name: 'CUMILLA', tutorCount: 1690 },
-  { name: 'RAJSHAHI', tutorCount: 3120 },
-  { name: 'BARISHAL', tutorCount: 1140 },
-  { name: 'RANGPUR', tutorCount: 980 },
-  { name: 'MYMENSINGH', tutorCount: 1450 },
+  { name: 'DHAKA', tutorCount: 25 },
+  { name: 'CHITTAGONG', tutorCount: 12 },
+  { name: 'SYLHET', tutorCount: 8 },
+  { name: 'KHULNA', tutorCount: 6 },
+  { name: 'GAZIPUR', tutorCount: 7 },
+  { name: 'CUMILLA', tutorCount: 4 },
+  { name: 'RAJSHAHI', tutorCount: 5 },
+  { name: 'BARISHAL', tutorCount: 3 },
+  { name: 'RANGPUR', tutorCount: 2 },
+  { name: 'MYMENSINGH', tutorCount: 3 },
 ];
 
 export const SERVICE_CATEGORIES: ServiceCategory[] = [

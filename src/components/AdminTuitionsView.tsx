@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { AdminTuitionEditModal } from "./tuition/AdminTuitionEditModal";
 import { Plus } from "lucide-react";
+import { formatTimeAgo } from "../lib/dateUtils";
 
 import { 
   CheckCircle, Edit, MapPin, DollarSign, Activity, 
@@ -446,12 +447,17 @@ export const AdminTuitionsView: React.FC = () => {
             
             {/* Top Row: Header & Badges */}
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold px-2 py-1 rounded-md bg-emerald-100 text-emerald-700 uppercase tracking-wide">
-                  Job ID: {t.id}
-                </span>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold px-2 py-1 rounded-md bg-emerald-100 text-emerald-700 uppercase tracking-wide">
+                    Job ID: {t.id}
+                  </span>
+                  <span className="text-xs text-slate-400 font-medium flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-slate-400" />
+                    Published {formatTimeAgo(t.postedAt || t.createdAt)}
+                  </span>
+                </div>
                 <h3 className="font-bold text-slate-900 text-base sm:text-lg">{t.title || t.subject || `${t.category} - ${t.course}`}</h3>
-
               </div>
               <div className="flex gap-2 items-center flex-wrap">
                 <span className={`text-xs font-bold px-2.5 py-1 rounded-full border flex items-center gap-1 ${

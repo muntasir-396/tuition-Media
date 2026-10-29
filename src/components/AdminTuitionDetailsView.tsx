@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { AdminTuitionEditModal } from "./tuition/AdminTuitionEditModal";
+import { formatTimeAgo } from "../lib/dateUtils";
 
 import { MapPin, DollarSign, Activity, CheckCircle, XCircle, Users, BookOpen, Clock, Calendar, MessageSquare, ArrowLeft, Edit, User, GraduationCap, Phone, Mail, Award, CheckCircle2, Eye, ShieldCheck, Briefcase, BookMarked, Ban } from 'lucide-react';
 
@@ -187,13 +188,15 @@ export const AdminTuitionDetailsView: React.FC = () => {
             <ArrowLeft className="w-5 h-5 text-slate-700" />
           </button>
           <div>
-            <h2 className="text-2xl font-black text-slate-900">Tuition {tuition.id}</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-black text-slate-900">Tuition {tuition.id}</h2>
+              <span className="text-xs text-slate-500 font-medium bg-slate-100 px-2.5 py-1 rounded-full flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                Published {formatTimeAgo(tuition.postedAt || tuition.createdAt)}
+              </span>
+            </div>
             <p className="text-sm text-slate-500 font-medium">Detailed view and administration.</p>
-
-
           </div>
-
-
         </div>
         <button
           onClick={() => setIsEditModalOpen(true)}
@@ -201,10 +204,7 @@ export const AdminTuitionDetailsView: React.FC = () => {
         >
           <Edit className="w-4 h-4" /> Edit Job Details
         </button>
-
-
       </div>
-
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
@@ -219,8 +219,13 @@ export const AdminTuitionDetailsView: React.FC = () => {
               <div>
                 <span className="block text-slate-500 text-xs font-semibold mb-1">Job ID</span>
                 <span className="font-bold text-slate-800">{tuition.id}</span>
-
-
+              </div>
+              <div>
+                <span className="block text-slate-500 text-xs font-semibold mb-1">Published</span>
+                <span className="font-bold text-slate-800 flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                  {formatTimeAgo(tuition.postedAt || tuition.createdAt)}
+                </span>
               </div>
               <div>
                 <span className="block text-slate-500 text-xs font-semibold mb-1">Category</span>

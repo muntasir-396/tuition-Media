@@ -57,7 +57,7 @@ export const JobDetailsView: React.FC = () => {
   }
 
   const isBookmarked = bookmarkedJobIds.includes(selectedJob.id);
-  const isApplied = appliedJobIds.includes(selectedJob.id);
+  const isApplied = appliedJobIds.includes(selectedJob.id) || (selectedJob.jobCode ? appliedJobIds.includes(selectedJob.jobCode) : false);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-24">

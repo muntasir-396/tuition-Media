@@ -1,5 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
+import { formatTimeAgo } from '../lib/dateUtils';
 import { SERVICE_CATEGORIES } from '../data/mockData';
 import {
   Search,
@@ -340,7 +341,7 @@ export const HomeView: React.FC = () => {
                           <span>•</span>
                           <span className="flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5 text-slate-400" />
-                            {job.postedAt ? new Date(job.postedAt).toLocaleDateString() : 'Recent'}
+                            {formatTimeAgo(job.postedAt || job.createdAt)}
                           </span>
                           <span>•</span>
                           <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[11px] border ${

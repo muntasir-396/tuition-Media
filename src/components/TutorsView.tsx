@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { CITY_METRICS } from '../data/mockData';
 import {
   Users,
   Search,
@@ -80,6 +79,41 @@ export const TutorsView: React.FC = () => {
     return true;
   });
 
+  const getCityTutorCount = (cityName: string) => {
+    const target = cityName.toLowerCase().trim();
+    return tutors.filter((tutor) => {
+      const tutorCity = (tutor.city || '').toLowerCase();
+      const tutorDistrict = (tutor.district || '').toLowerCase();
+      const tutorLocation = (tutor.location || '').toLowerCase();
+      const tutorArea = (tutor.area || '').toLowerCase();
+      return (
+        tutorCity === target ||
+        tutorDistrict === target ||
+        tutorLocation.includes(target) ||
+        tutorArea.includes(target)
+      );
+    }).length;
+  };
+
+  const availableCities = React.useMemo(() => {
+    const defaultCities = [
+      'DHAKA',
+      'CHITTAGONG',
+      'SYLHET',
+      'KHULNA',
+      'GAZIPUR',
+      'CUMILLA',
+      'RAJSHAHI',
+      'BARISHAL',
+      'RANGPUR',
+      'MYMENSINGH'
+    ];
+    return defaultCities.map((name) => ({
+      name,
+      count: getCityTutorCount(name)
+    }));
+  }, [tutors]);
+
   const exclusiveTutors = filteredTutors.filter((t) => t.exclusive);
 
   return (
@@ -156,9 +190,9 @@ export const TutorsView: React.FC = () => {
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
-            All Bangladesh (250k+)
+            All Bangladesh ({tutors.length})
           </button>
-          {CITY_METRICS.map((c) => (
+          {availableCities.map((c) => (
             <button
               key={c.name}
               onClick={() => setSelectedCity(c.name)}
@@ -168,7 +202,7 @@ export const TutorsView: React.FC = () => {
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
-              {c.name} ({c.tutorCount.toLocaleString()})
+              {c.name} ({c.count})
             </button>
           ))}
         </div>
@@ -179,7 +213,7 @@ export const TutorsView: React.FC = () => {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between gap-3 min-w-0 w-full">
           <div className="min-w-0 flex-1">
             <span className="text-xs font-semibold text-slate-500 block truncate">Total Registered Tutors</span>
-            <h4 className="text-xl sm:text-2xl font-black text-slate-900 truncate">250,000+</h4>
+            <h4 className="text-xl sm:text-2xl font-black text-slate-900 truncate">{tutors.length} Tutors</h4>
             <span className="text-[10px] text-emerald-600 font-bold">100% NID Verified</span>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-lime-100 text-[#65A30D] flex items-center justify-center">

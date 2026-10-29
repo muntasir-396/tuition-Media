@@ -112,6 +112,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res.ok) {
         const data = await res.json();
         setMyTutorProfile(data);
+        
+        try {
+          const appRes = await fetch('/api/tutor/my-applications');
+          if (appRes.ok) {
+            const appData = await appRes.json();
+            if (Array.isArray(appData.appliedJobIds)) {
+              setAppliedJobIds(appData.appliedJobIds);
+            }
+          }
+        } catch(ae) {}
+
         return data;
       }
     } catch(e) {}
@@ -140,6 +151,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     setSelectedTutor(prev => prev || tData);
                   }
                 } catch(e) {}
+                try {
+                  const appRes = await fetch('/api/tutor/my-applications');
+                  if (appRes.ok) {
+                    const appData = await appRes.json();
+                    if (Array.isArray(appData.appliedJobIds)) {
+                      setAppliedJobIds(appData.appliedJobIds);
+                    }
+                  }
+                } catch(ae) {}
               }
            }
         } else {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { CITY_METRICS } from '../data/mockData';
+import { formatTimeAgo } from '../lib/dateUtils';
 import {
   Play,
   SlidersHorizontal,
@@ -74,29 +74,83 @@ export const JobsView: React.FC = () => {
     return () => window.removeEventListener('tutorlink:job-applied', handleApplied);
   }, []);
 
+  const getCityJobCount = (cityName: string) => {
+    const target = cityName.toLowerCase().trim();
+    return jobs.filter((job) => {
+      const jobCity = (job.city || '').toLowerCase();
+      const jobDistrict = (job.district || '').toLowerCase();
+      const jobLocation = (job.location || job.fullAddress || '').toLowerCase();
+      const jobArea = (job.area || '').toLowerCase();
+      return (
+        jobCity === target ||
+        jobDistrict === target ||
+        jobLocation.includes(target) ||
+        jobArea.includes(target)
+      );
+    }).length;
+  };
+
+  const availableCities = React.useMemo(() => {
+    const defaultCities = [
+      'DHAKA',
+      'CHITTAGONG',
+      'SYLHET',
+      'KHULNA',
+      'GAZIPUR',
+      'CUMILLA',
+      'RAJSHAHI',
+      'BARISHAL',
+      'RANGPUR',
+      'MYMENSINGH'
+    ];
+    const extraCities: string[] = [];
+    jobs.forEach((j) => {
+      const c = (j.city || j.district || '').trim().toUpperCase();
+      if (c && !defaultCities.includes(c) && !extraCities.includes(c)) {
+        extraCities.push(c);
+      }
+    });
+    return [...defaultCities, ...extraCities].map((name) => ({
+      name,
+      count: getCityJobCount(name)
+    }));
+  }, [jobs]);
+
   // Filter jobs dynamically
   const filteredJobs = jobs.filter((job) => {
     // City filter
-    if (selectedCity !== 'All' && job.city.toLowerCase() !== selectedCity.toLowerCase()) {
-      return false;
+    if (selectedCity !== 'All') {
+      const target = selectedCity.toLowerCase().trim();
+      const jobCity = (job.city || '').toLowerCase();
+      const jobDistrict = (job.district || '').toLowerCase();
+      const jobLocation = (job.location || job.fullAddress || '').toLowerCase();
+      const jobArea = (job.area || '').toLowerCase();
+      const matches =
+        jobCity === target ||
+        jobDistrict === target ||
+        jobLocation.includes(target) ||
+        jobArea.includes(target);
+      if (!matches) return false;
     }
     // Search by Job ID or keyword
     if (jobSearchId.trim()) {
       const q = jobSearchId.toLowerCase().trim();
-      const matchId = job.id.toLowerCase().includes(q);
-      const matchTitle = job.title.toLowerCase().includes(q);
-      const matchLocation = job.location.toLowerCase().includes(q);
-      const matchSubjects = job.subjects.some((s) => s.toLowerCase().includes(q));
+      const matchId = (job.id || '').toLowerCase().includes(q) || (job.jobCode || '').toLowerCase().includes(q);
+      const matchTitle = (job.title || '').toLowerCase().includes(q);
+      const matchLocation = (job.location || job.fullAddress || '').toLowerCase().includes(q);
+      const matchSubjects = Array.isArray(job.subjects)
+        ? job.subjects.some((s: string) => s.toLowerCase().includes(q))
+        : (job.subjects || '').toLowerCase().includes(q);
       if (!matchId && !matchTitle && !matchLocation && !matchSubjects) return false;
     }
     // Medium filter
-    if (selectedMediumFilter !== 'All' && job.category !== selectedMediumFilter) {
+    if (selectedMediumFilter !== 'All' && job.category !== selectedMediumFilter && job.curriculum !== selectedMediumFilter) {
       return false;
     }
     return true;
   }).sort((a, b) => {
-    if (sortBy === 'salary-high') return b.salary - a.salary;
-    if (sortBy === 'salary-low') return a.salary - b.salary;
+    if (sortBy === 'salary-high') return (b.salary || 0) - (a.salary || 0);
+    if (sortBy === 'salary-low') return (a.salary || 0) - (b.salary || 0);
     return 0; // default latest
   });
 
@@ -176,9 +230,9 @@ export const JobsView: React.FC = () => {
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
-              All Regions
+              All Regions {jobs.length > 0 ? `(${jobs.length})` : ''}
             </button>
-            {CITY_METRICS.map((city) => (
+            {availableCities.map((city) => (
               <button
                 key={city.name}
                 onClick={() => setSelectedCity(city.name)}
@@ -188,7 +242,7 @@ export const JobsView: React.FC = () => {
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                {city.name} ({city.tutorCount > 10000 ? `${(city.tutorCount / 1000).toFixed(0)}k` : city.tutorCount})
+                {city.name} ({city.count})
               </button>
             ))}
           </div>
@@ -260,7 +314,7 @@ export const JobsView: React.FC = () => {
                         <span>•</span>
                         <span className="flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5 text-slate-400" />
-                          {job.postedAt}
+                          <span>{formatTimeAgo(job.postedAt || job.createdAt)}</span>
                         </span>
                         <span>•</span>
                         <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[11px] border ${

@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   FileText,
   Bookmark,
+  Lock,
 } from 'lucide-react';
 
 export const Modals: React.FC = () => {
@@ -35,7 +36,10 @@ export const Modals: React.FC = () => {
     selectedMediumFilter,
     setSelectedMediumFilter,
     currentUser,
+    myTutorProfile,
     isLoggedIn,
+    appliedJobIds,
+    setActiveTab,
   } = useApp();
 
   const [applyNotes, setApplyNotes] = useState('');
@@ -58,23 +62,31 @@ export const Modals: React.FC = () => {
     }
   }, [currentUser]);
 
+  useEffect(() => {
+    if (jobToApply) {
+      setExpectedSalary(jobToApply.salary ? String(jobToApply.salary) : '');
+      setApplyError(null);
+    }
+  }, [jobToApply]);
+
   const handleApplySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setApplyError(null);
+    if (!isLoggedIn) {
+      setApplyError('You must sign up and log in as a tutor to apply for tuition jobs.');
+      return;
+    }
     if (jobToApply) {
       setIsSubmitting(true);
       try {
         const res = await fetch('/api/v1/tutor/apply', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ 
             jobId: jobToApply.id, 
             expectedSalary, 
-            notes: applyNotes,
-            tutorName: tutorName || currentUser?.name || 'Applicant Tutor',
-            tutorPhone: tutorPhone || currentUser?.phone || '01700000000',
-            university: tutorUniversity || currentUser?.university || 'University Graduate',
-            department: tutorDepartment || 'General'
+            notes: applyNotes
           })
         });
         
@@ -243,8 +255,75 @@ export const Modals: React.FC = () => {
                 <CheckCircle2 className="w-12 h-12 text-[#84CC16] mx-auto animate-bounce" />
                 <h4 className="font-black text-slate-900 text-lg">Application Submitted!</h4>
                 <p className="text-xs text-slate-500">
-                  Job ID: {jobToApply.id} • The parent will review your profile & contact you directly.
+                  Job ID: {jobToApply.id} • Your account is now listed under this job in the admin dashboard.
                 </p>
+              </div>
+            ) : !isLoggedIn ? (
+              <div className="py-4 text-center space-y-4">
+                <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto shadow-xs">
+                  <Lock className="w-7 h-7" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-black text-slate-900 text-lg">Sign In or Register to Apply</h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Job ID: <strong className="text-slate-800">{jobToApply.id}</strong> • {jobToApply.title}
+                  </p>
+                </div>
+                
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-left text-xs text-slate-600 space-y-1.5">
+                  <p className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-[#84CC16]" />
+                    <span>Verified Tutor Account Required</span>
+                  </p>
+                  <p className="text-slate-500 text-[11px] leading-relaxed">
+                    Anonymous or guest applications are disabled. To ensure quality and verification for guardians, all tutors must have an active TutorLink account. When you apply, your profile automatically appears in the admin panel.
+                  </p>
+                </div>
+
+                <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsApplyModalOpen(false);
+                      setActiveTab('login');
+                    }}
+                    className="w-full sm:w-1/2 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs transition-colors cursor-pointer"
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsApplyModalOpen(false);
+                      setActiveTab('login');
+                    }}
+                    className="w-full sm:w-1/2 py-2.5 rounded-xl bg-[#84CC16] hover:bg-[#65A30D] text-slate-950 font-black text-xs transition-colors cursor-pointer shadow-xs"
+                  >
+                    Register as Tutor
+                  </button>
+                </div>
+              </div>
+            ) : appliedJobIds.includes(jobToApply.id) || (jobToApply.jobCode && appliedJobIds.includes(jobToApply.jobCode)) ? (
+              <div className="py-6 text-center space-y-4">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto shadow-xs">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-black text-slate-900 text-lg">Already Applied</h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Job ID: <strong className="text-slate-800">{jobToApply.id}</strong> • {jobToApply.title}
+                  </p>
+                </div>
+                <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-2xl text-xs text-emerald-900 leading-relaxed font-medium">
+                  Your tutor profile and credentials are already registered for this tuition job and visible in the admin portal. There is no need to submit this application again.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsApplyModalOpen(false)}
+                  className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
               </div>
             ) : (
               <form onSubmit={handleApplySubmit} className="space-y-4">
@@ -259,71 +338,51 @@ export const Modals: React.FC = () => {
                   <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 font-semibold flex items-start gap-2.5">
                     <span className="text-base leading-none">⚠️</span>
                     <div className="flex-1">
-                      <p className="font-bold text-red-900">Application Denied</p>
+                      <p className="font-bold text-red-900">Application Notice</p>
                       <p className="mt-0.5 text-red-700 leading-relaxed">{applyError}</p>
                     </div>
                   </div>
                 )}
 
-                {isLoggedIn && currentUser ? (
-                  <div className="p-3 bg-lime-50 rounded-xl border border-lime-200 text-xs text-lime-900 flex items-center justify-between">
-                    <div>
-                      <span className="font-bold block">Applying as: {currentUser.name}</span>
-                      <span className="text-lime-700">{currentUser.university || 'Registered Tutor'} • {currentUser.phone || ''}</span>
-                    </div>
-                    <span className="px-2 py-0.5 rounded-full bg-[#84CC16] text-slate-950 font-black text-[10px] uppercase">Logged In</span>
+                {/* Auto-linked Tutor Profile Card */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
+                      Your Registered Tutor Profile
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-lime-100 text-[#65A30D] font-extrabold text-[10px] flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-[#65A30D]" /> Auto Linked
+                    </span>
                   </div>
-                ) : (
-                  <div className="space-y-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
-                    <p className="text-slate-500 font-semibold text-[11px]">Your Tutor Profile Info:</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-slate-500 mb-1">Full Name *</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. Muntasir Mamun"
-                          value={tutorName}
-                          onChange={(e) => setTutorName(e.target.value)}
-                          className="w-full p-2 rounded-lg border border-slate-200 bg-white text-xs font-medium"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-slate-500 mb-1">Phone Number *</label>
-                        <input
-                          type="tel"
-                          required
-                          placeholder="e.g. 01712345678"
-                          value={tutorPhone}
-                          onChange={(e) => setTutorPhone(e.target.value)}
-                          className="w-full p-2 rounded-lg border border-slate-200 bg-white text-xs font-medium"
-                        />
-                      </div>
+
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-lime-100 text-[#65A30D] font-black text-sm flex items-center justify-center shrink-0 uppercase border border-lime-200">
+                      {currentUser?.name ? currentUser.name.substring(0, 2) : 'TU'}
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-slate-500 mb-1">University / College</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. BUET / DU / NSU"
-                          value={tutorUniversity}
-                          onChange={(e) => setTutorUniversity(e.target.value)}
-                          className="w-full p-2 rounded-lg border border-slate-200 bg-white text-xs font-medium"
-                        />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-black text-slate-900 text-sm truncate">{currentUser?.name}</h4>
+                        {(myTutorProfile?.tutorCode || currentUser?.id) && (
+                          <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">
+                            {myTutorProfile?.tutorCode || currentUser?.id}
+                          </span>
+                        )}
                       </div>
-                      <div>
-                        <label className="block text-slate-500 mb-1">Department</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. CSE / EEE / BBA"
-                          value={tutorDepartment}
-                          onChange={(e) => setTutorDepartment(e.target.value)}
-                          className="w-full p-2 rounded-lg border border-slate-200 bg-white text-xs font-medium"
-                        />
-                      </div>
+                      <p className="text-xs text-slate-600 font-medium truncate mt-0.5">
+                        {myTutorProfile?.university || currentUser?.university || 'University Student'}
+                        {(myTutorProfile?.department || currentUser?.department) ? ` • ${myTutorProfile?.department || currentUser?.department}` : ''}
+                      </p>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                        📱 {currentUser?.phone || myTutorProfile?.phone || 'Account Phone'}
+                      </p>
                     </div>
                   </div>
-                )}
+
+                  <div className="pt-2 border-t border-slate-200/80 flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#65A30D] shrink-0" />
+                    <span>Your account credentials automatically show in admin. No need to re-enter your details.</span>
+                  </div>
+                </div>
 
                 <div className="space-y-3 text-xs font-bold text-slate-700">
                   <div>
@@ -333,18 +392,18 @@ export const Modals: React.FC = () => {
                       placeholder={`Asking Salary (Default: ${jobToApply.salary} BDT)`}
                       value={expectedSalary}
                       onChange={(e) => setExpectedSalary(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-slate-200 text-sm font-medium"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-hidden focus:border-[#84CC16]"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-500 mb-1">Cover Note for Parent / Guardian:</label>
+                    <label className="block text-slate-500 mb-1">Cover Note for Parent / Admin (Optional):</label>
                     <textarea
-                      rows={3}
-                      placeholder="Briefly state your university background, teaching experience, and relevant subjects..."
+                      rows={2}
+                      placeholder="Briefly state your availability, teaching experience, and relevant subjects..."
                       value={applyNotes}
                       onChange={(e) => setApplyNotes(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-hidden"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-hidden focus:border-[#84CC16]"
                     />
                   </div>
                 </div>
@@ -353,14 +412,14 @@ export const Modals: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setIsApplyModalOpen(false)}
-                    className="w-1/2 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 transition-colors"
+                    className="w-1/2 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-1/2 py-2.5 rounded-xl bg-[#84CC16] hover:bg-[#65A30D] text-slate-950 font-black text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    className="w-1/2 py-2.5 rounded-xl bg-[#84CC16] hover:bg-[#65A30D] text-slate-950 font-black text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
                   >
                     <Send className="w-3.5 h-3.5 stroke-[2.5]" />
                     <span>{isSubmitting ? 'Submitting...' : 'Confirm Application'}</span>

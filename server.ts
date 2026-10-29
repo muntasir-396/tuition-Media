@@ -199,19 +199,19 @@ function initMockData() {
       notes: 'buet', 
       parentSpecialInstructions: 'buet', 
       status: 'PENDING_REVIEW', 
-      createdAt: now, 
-      updatedAt: now, 
+      createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(), 
+      updatedAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(), 
       views: 1, 
       applications: 0 
     },
-    { id: 'JOB-80703', title: 'Class 6 Math Tuition in Mirpur', curriculum: 'Bangla Medium', course: 'Class 6', courseClass: 'Class 6', subjects: ['Math'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Any', daysPerWeek: '5 days', preferredTime: '5:00 PM', method: 'Home Tutoring', salaryMax: 4000, salary: '4000', fullAddress: 'Mirpur-1, Dhaka', area: 'Mirpur', district: 'Dhaka', city: 'Dhaka', guardianName: 'Md. Rahman', guardianPhone: '01712345678', status: 'OPEN', createdAt: now, updatedAt: now, views: 45, applications: 3, jobCode: 'JOB-80703' },
-    { id: 'JOB-80704', title: 'Class 10 Science Tuition in Banani', curriculum: 'English Medium', course: 'Class 10', courseClass: 'Class 10', subjects: ['Physics', 'Chemistry'], studentCount: '2', studentGender: 'Female', preferredTutorGender: 'Female', daysPerWeek: '3 days', preferredTime: '6:30 PM', method: 'Online Tutoring', salaryMax: 6000, salary: '6000', fullAddress: 'Banani, Dhaka', area: 'Banani', district: 'Dhaka', city: 'Dhaka', guardianName: 'Mrs. Ahmed', guardianPhone: '01798765432', status: 'OPEN', createdAt: now, updatedAt: now, views: 32, applications: 1, jobCode: 'JOB-80704' },
-    { id: 'JOB-80705', title: 'O Level Physics Tuition in Gulshan', curriculum: 'A/O Levels', course: 'O Level', courseClass: 'O Level', subjects: ['Physics'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Male', daysPerWeek: '4 days', preferredTime: '4:00 PM', method: 'Home Tutoring', salaryMax: 8000, salary: '8000', fullAddress: 'Gulshan-2, Dhaka', area: 'Gulshan', district: 'Dhaka', city: 'Dhaka', guardianName: 'Mr. Karim', guardianPhone: '01711111111', status: 'PENDING_REVIEW', createdAt: now, updatedAt: now, views: 18, applications: 0, jobCode: 'JOB-80705' },
-    { id: 'JOB-80706', title: 'Class 9 English Tuition in Chittagong', curriculum: 'English Version', course: 'Class 9', courseClass: 'Class 9', subjects: ['English'], studentCount: '1', studentGender: 'Mix', preferredTutorGender: 'Any', daysPerWeek: '3 days', preferredTime: '5:30 PM', method: 'Batch Tutoring', salaryMax: 3500, salary: '3500', fullAddress: 'Agrabad, Chittagong', area: 'Agrabad', district: 'Chittagong', city: 'Chittagong', guardianName: 'Mr. Hossain', guardianPhone: '01822222222', status: 'OPEN', createdAt: now, updatedAt: now, views: 27, applications: 5, jobCode: 'JOB-80706' },
-    { id: 'JOB-80707', title: 'SSC Math Tuition in Sylhet', curriculum: 'Bangla Medium', course: 'Class 10', courseClass: 'Class 10', subjects: ['Math', 'Physics'], studentCount: '3', studentGender: 'Male', preferredTutorGender: 'Male', daysPerWeek: '6 days', preferredTime: '6:00 PM', method: 'Home Tutoring', salaryMax: 5000, salary: '5000', fullAddress: 'Sylhet City', area: 'Sylhet', district: 'Sylhet', city: 'Sylhet', guardianName: 'Mr. Ali', guardianPhone: '01933333333', status: 'TEACHERS_APPLIED', createdAt: now, updatedAt: now, views: 56, applications: 8, jobCode: 'JOB-80707' },
-    { id: 'JOB-80708', title: 'Class 3 Nursery English Tuition in Gazipur', curriculum: 'English Medium', course: 'Nursery', courseClass: 'Nursery', subjects: ['English'], studentCount: '1', studentGender: 'Female', preferredTutorGender: 'Female', daysPerWeek: '5 days', preferredTime: '4:30 PM', method: 'Home Tutoring', salaryMax: 3000, salary: '3000', fullAddress: 'Gazipur', area: 'Gazipur', district: 'Gazipur', city: 'Gazipur', guardianName: 'Mrs. Khatun', guardianPhone: '01644444444', status: 'OPEN', createdAt: now, updatedAt: now, views: 12, applications: 2, jobCode: 'JOB-80708' },
-    { id: 'JOB-80709', title: 'HSC Biology Tuition in Khulna', curriculum: 'Bangla Medium', course: 'Class 12', courseClass: 'Class 12', subjects: ['Biology', 'Chemistry'], studentCount: '2', studentGender: 'Mix', preferredTutorGender: 'Any', daysPerWeek: '4 days', preferredTime: '7:00 PM', method: 'Online Tutoring', salaryMax: 5500, salary: '5500', fullAddress: 'Khulna', area: 'Khulna', district: 'Khulna', city: 'Khulna', guardianName: 'Mr. Das', guardianPhone: '01755555555', status: 'CONFIRMED', createdAt: now, updatedAt: now, views: 89, applications: 12, jobCode: 'JOB-80709' },
-    { id: 'JOB-80710', title: 'Class 11 Physics Tuition in Rajshahi', curriculum: 'Bangla Medium', course: 'Class 11', courseClass: 'Class 11', subjects: ['Physics', 'Higher Math'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Male', daysPerWeek: '3 days', preferredTime: '5:00 PM', method: 'Home Tutoring', salaryMax: 4500, salary: '4500', fullAddress: 'Rajshahi', area: 'Rajshahi', district: 'Rajshahi', city: 'Rajshahi', guardianName: 'Mr. Islam', guardianPhone: '01866666666', status: 'OPEN', createdAt: now, updatedAt: now, views: 21, applications: 0, jobCode: 'JOB-80710' },
+    { id: 'JOB-80703', title: 'Class 6 Math Tuition in Mirpur', curriculum: 'Bangla Medium', course: 'Class 6', courseClass: 'Class 6', subjects: ['Math'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Any', daysPerWeek: '5 days', preferredTime: '5:00 PM', method: 'Home Tutoring', salaryMax: 4000, salary: '4000', fullAddress: 'Mirpur-1, Dhaka', area: 'Mirpur', district: 'Dhaka', city: 'Dhaka', guardianName: 'Md. Rahman', guardianPhone: '01712345678', status: 'OPEN', createdAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(), views: 45, applications: 3, jobCode: 'JOB-80703' },
+    { id: 'JOB-80704', title: 'Class 10 Science Tuition in Banani', curriculum: 'English Medium', course: 'Class 10', courseClass: 'Class 10', subjects: ['Physics', 'Chemistry'], studentCount: '2', studentGender: 'Female', preferredTutorGender: 'Female', daysPerWeek: '3 days', preferredTime: '6:30 PM', method: 'Online Tutoring', salaryMax: 6000, salary: '6000', fullAddress: 'Banani, Dhaka', area: 'Banani', district: 'Dhaka', city: 'Dhaka', guardianName: 'Mrs. Ahmed', guardianPhone: '01798765432', status: 'OPEN', createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), views: 32, applications: 1, jobCode: 'JOB-80704' },
+    { id: 'JOB-80705', title: 'O Level Physics Tuition in Gulshan', curriculum: 'A/O Levels', course: 'O Level', courseClass: 'O Level', subjects: ['Physics'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Male', daysPerWeek: '4 days', preferredTime: '4:00 PM', method: 'Home Tutoring', salaryMax: 8000, salary: '8000', fullAddress: 'Gulshan-2, Dhaka', area: 'Gulshan', district: 'Dhaka', city: 'Dhaka', guardianName: 'Mr. Karim', guardianPhone: '01711111111', status: 'PENDING_REVIEW', createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), views: 18, applications: 0, jobCode: 'JOB-80705' },
+    { id: 'JOB-80706', title: 'Class 9 English Tuition in Chittagong', curriculum: 'English Version', course: 'Class 9', courseClass: 'Class 9', subjects: ['English'], studentCount: '1', studentGender: 'Mix', preferredTutorGender: 'Any', daysPerWeek: '3 days', preferredTime: '5:30 PM', method: 'Batch Tutoring', salaryMax: 3500, salary: '3500', fullAddress: 'Agrabad, Chittagong', area: 'Agrabad', district: 'Chittagong', city: 'Chittagong', guardianName: 'Mr. Hossain', guardianPhone: '01822222222', status: 'OPEN', createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), views: 27, applications: 5, jobCode: 'JOB-80706' },
+    { id: 'JOB-80707', title: 'SSC Math Tuition in Sylhet', curriculum: 'Bangla Medium', course: 'Class 10', courseClass: 'Class 10', subjects: ['Math', 'Physics'], studentCount: '3', studentGender: 'Male', preferredTutorGender: 'Male', daysPerWeek: '6 days', preferredTime: '6:00 PM', method: 'Home Tutoring', salaryMax: 5000, salary: '5000', fullAddress: 'Sylhet City', area: 'Sylhet', district: 'Sylhet', city: 'Sylhet', guardianName: 'Mr. Ali', guardianPhone: '01933333333', status: 'TEACHERS_APPLIED', createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), views: 56, applications: 8, jobCode: 'JOB-80707' },
+    { id: 'JOB-80708', title: 'Class 3 Nursery English Tuition in Gazipur', curriculum: 'English Medium', course: 'Nursery', courseClass: 'Nursery', subjects: ['English'], studentCount: '1', studentGender: 'Female', preferredTutorGender: 'Female', daysPerWeek: '5 days', preferredTime: '4:30 PM', method: 'Home Tutoring', salaryMax: 3000, salary: '3000', fullAddress: 'Gazipur', area: 'Gazipur', district: 'Gazipur', city: 'Gazipur', guardianName: 'Mrs. Khatun', guardianPhone: '01644444444', status: 'OPEN', createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), views: 12, applications: 2, jobCode: 'JOB-80708' },
+    { id: 'JOB-80709', title: 'HSC Biology Tuition in Khulna', curriculum: 'Bangla Medium', course: 'Class 12', courseClass: 'Class 12', subjects: ['Biology', 'Chemistry'], studentCount: '2', studentGender: 'Mix', preferredTutorGender: 'Any', daysPerWeek: '4 days', preferredTime: '7:00 PM', method: 'Online Tutoring', salaryMax: 5500, salary: '5500', fullAddress: 'Khulna', area: 'Khulna', district: 'Khulna', city: 'Khulna', guardianName: 'Mr. Das', guardianPhone: '01755555555', status: 'CONFIRMED', createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(), views: 89, applications: 12, jobCode: 'JOB-80709' },
+    { id: 'JOB-80710', title: 'Class 11 Physics Tuition in Rajshahi', curriculum: 'Bangla Medium', course: 'Class 11', courseClass: 'Class 11', subjects: ['Physics', 'Higher Math'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Male', daysPerWeek: '3 days', preferredTime: '5:00 PM', method: 'Home Tutoring', salaryMax: 4500, salary: '4500', fullAddress: 'Rajshahi', area: 'Rajshahi', district: 'Rajshahi', city: 'Rajshahi', guardianName: 'Mr. Islam', guardianPhone: '01866666666', status: 'OPEN', createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), views: 21, applications: 0, jobCode: 'JOB-80710' },
   ];
 
   mockTutors = [
@@ -480,7 +480,21 @@ async function startServer() {
           return res.status(401).json({ error: 'Invalid admin credentials' });
         }
       } else {
-        userProfile = { id: 'usr-' + Date.now(), name: phoneOrEmail || 'User', role: role };
+        const matchedTutor = mockTutors.find((t: any) => 
+          (t.phone && t.phone === phoneOrEmail) || 
+          (t.email && t.email === phoneOrEmail) || 
+          (t.tutorCode && t.tutorCode === phoneOrEmail)
+        );
+
+        userProfile = { 
+          id: matchedTutor?.userId || matchedTutor?.id || ('usr-' + Date.now()), 
+          name: matchedTutor?.fullName || matchedTutor?.name || phoneOrEmail || 'User', 
+          role: role || 'tutor',
+          phone: matchedTutor?.phone || phoneOrEmail,
+          email: matchedTutor?.email || (phoneOrEmail.includes('@') ? phoneOrEmail : `${phoneOrEmail}@tutorlink.com`),
+          university: matchedTutor?.university || 'University Student',
+          department: matchedTutor?.department || 'General'
+        };
       }
       
       const token = generateToken(userProfile);
@@ -1066,26 +1080,38 @@ async function startServer() {
     }
   });
 
+  // Tutor My Applications Endpoint
+  app.get("/api/tutor/my-applications", authMiddleware, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+      const myApps = mockApplications.filter((a: any) => 
+        (user.id && (a.tutorId === user.id || a.tutorCode === user.id || a.userId === user.id)) ||
+        (user.phone && a.phone === user.phone) ||
+        (user.email && a.email === user.email)
+      );
+
+      const jobIds = Array.from(new Set(myApps.map((a: any) => a.tuitionId || a.jobCode).filter(Boolean)));
+      res.json({ appliedJobIds: jobIds, applications: myApps });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Failed to load tutor applications" });
+    }
+  });
+
   app.post("/api/v1/tutor/apply", async (req, res) => {
     try {
       const {
         jobId,
         expectedSalary,
-        notes,
-        tutorName,
-        tutorPhone,
-        tutorEmail,
-        university,
-        department,
-        gender,
-        tutoringExperience
+        notes
       } = req.body;
 
       if (!jobId) {
         return res.status(400).json({ error: "Job ID is required" });
       }
 
-      // 1. Identify user from cookie/bearer token if present
+      // 1. MUST BE LOGGED IN: Verify authentication token
       let tokenUser: any = null;
       let token = req.cookies?.tutorlink_auth_token;
       if (req.headers.authorization?.startsWith('Bearer ')) {
@@ -1095,27 +1121,97 @@ async function startServer() {
         tokenUser = verifyToken(token);
       }
 
-      const applicantName = tutorName || tokenUser?.name || 'Applicant Tutor';
-      const applicantPhone = tutorPhone || tokenUser?.phone || '01700000000';
-      const applicantEmail = tutorEmail || tokenUser?.email || `${applicantPhone}@tutorlink.com`;
-      const applicantUni = university || tokenUser?.university || 'Dhaka University';
-      const applicantDept = department || 'General';
+      if (!tokenUser) {
+        return res.status(401).json({ 
+          error: "Authentication required. You must sign up and log in as a tutor to apply for tuition jobs." 
+        });
+      }
 
-      // 2. CHECK IF TUTOR IS BLOCKED! If blocked, reject application.
-      const matchedMock = mockTutors.find((m: any) => 
-        (tokenUser?.id && (m.id === tokenUser.id || m.tutorCode === tokenUser.id || m.userId === tokenUser.id)) ||
-        (applicantPhone && m.phone === applicantPhone)
+      if (tokenUser.role === 'guardian' || tokenUser.role === 'parent') {
+        return res.status(403).json({
+          error: "Guardian accounts cannot apply for tuitions. Please switch to or register a Tutor account."
+        });
+      }
+
+      // 2. Identify and link the tutor's registered profile automatically
+      let tutorObj = mockTutors.find((m: any) => 
+        (tokenUser.id && (m.id === tokenUser.id || m.tutorCode === tokenUser.id || m.userId === tokenUser.id)) ||
+        (tokenUser.phone && m.phone === tokenUser.phone) ||
+        (tokenUser.email && m.email === tokenUser.email) ||
+        (tokenUser.name && m.fullName && m.fullName.toLowerCase() === tokenUser.name.toLowerCase())
       );
-      if (matchedMock && (matchedMock.status === 'blocked' || matchedMock.status === 'suspended')) {
+
+      if (!tutorObj) {
+        try {
+          const dbTutors = await db.select().from(tutorProfiles)
+            .leftJoin(profiles, eq(tutorProfiles.userId, profiles.id))
+            .where(sql`${profiles.phone} = ${tokenUser.phone} OR ${profiles.id}::text = ${tokenUser.id} OR ${profiles.email} = ${tokenUser.email}`).limit(1);
+          if (dbTutors.length > 0) {
+            tutorObj = {
+              ...dbTutors[0].tutor_profiles,
+              name: dbTutors[0].tutor_profiles.fullName || dbTutors[0].profiles?.fullName || tokenUser.name,
+              fullName: dbTutors[0].tutor_profiles.fullName || dbTutors[0].profiles?.fullName || tokenUser.name,
+              phone: dbTutors[0].profiles?.phone || tokenUser.phone,
+              email: dbTutors[0].profiles?.email || tokenUser.email,
+              university: dbTutors[0].tutor_profiles.university || tokenUser.university,
+              department: dbTutors[0].tutor_profiles.department || tokenUser.department,
+            };
+            mockTutors.unshift(tutorObj);
+          }
+        } catch (dbErr) {}
+      }
+
+      if (!tutorObj) {
+        const tutorCode = 'TT-' + Math.floor(10000 + Math.random() * 90000);
+        tutorObj = {
+          id: tutorCode,
+          tutorCode: tutorCode,
+          userId: tokenUser.id,
+          fullName: tokenUser.name || 'Registered Tutor',
+          name: tokenUser.name || 'Registered Tutor',
+          phone: tokenUser.phone || '01700000000',
+          email: tokenUser.email || `${tokenUser.phone || 'tutor'}@tutorlink.com`,
+          university: tokenUser.university || 'Dhaka University',
+          department: tokenUser.department || 'General',
+          gender: tokenUser.gender || 'Any',
+          district: tokenUser.district || 'Dhaka',
+          area: tokenUser.area || 'Dhaka',
+          tutoringExperience: tokenUser.tutoringExperience || 2,
+          status: 'active',
+          verificationStatus: 'verified',
+          profileCompletion: 85
+        };
+        mockTutors.unshift(tutorObj);
+      }
+
+      // 3. CHECK IF TUTOR IS BLOCKED
+      if (tutorObj.status === 'blocked' || tutorObj.status === 'suspended') {
         return res.status(403).json({ 
           error: "Your tutor account is suspended or blocked by the administrator. You cannot apply for tuition jobs. Please contact support." 
         });
       }
 
-      // 3. Persist to DB if possible (resilient fallback to in-memory)
+      // 4. CHECK IF TUTOR ALREADY APPLIED (NO NEED TO SUBMIT AGAIN)
+      const existingMock = mockApplications.find((a: any) => 
+        (a.tuitionId === jobId || a.jobCode === jobId) &&
+        (a.tutorId === tutorObj.id || a.tutorCode === tutorObj.tutorCode || (tutorObj.phone && a.phone === tutorObj.phone))
+      );
+      if (existingMock) {
+        return res.status(400).json({
+          error: "You have already applied for this tuition job. Your application is already registered and visible to admin. No need to submit again."
+        });
+      }
+
+      const applicantName = tutorObj.fullName || tutorObj.name || tokenUser.name;
+      const applicantPhone = tutorObj.phone || tokenUser.phone;
+      const applicantEmail = tutorObj.email || tokenUser.email;
+      const applicantUni = tutorObj.university || tokenUser.university || 'University Graduate';
+      const applicantDept = tutorObj.department || tokenUser.department || 'General';
+
+      // 5. Persist to DB if possible (resilient fallback to in-memory)
       const salaryVal = expectedSalary ? parseInt(expectedSalary.toString().replace(/[^0-9]/g, '')) : null;
       let appResult: any = null;
-      let tutorId: string = matchedMock?.id || `TT-${Math.floor(10000 + Math.random() * 90000)}`;
+      let tutorId: string = tutorObj.id || tutorObj.tutorCode;
 
       try {
         let profileId: string;
@@ -1176,34 +1272,21 @@ async function startServer() {
         console.warn("DB apply sync note (using in-memory store):", dbErr?.message);
       }
 
-      // Sync mock tuition and mockApplications state in-memory as well
-      const tutorObj = matchedMock || {
-        id: tutorId,
-        tutorCode: `TT-${Math.floor(10000 + Math.random() * 90000)}`,
-        name: applicantName,
-        fullName: applicantName,
-        phone: applicantPhone,
-        email: applicantEmail,
-        university: applicantUni,
-        department: applicantDept,
-        gender: gender || 'Any',
-        district: 'Dhaka',
-        area: 'Dhaka',
-        tutoringExperience: tutoringExperience ? parseInt(tutoringExperience.toString()) : 2,
-        status: 'active'
-      };
+      const mock = mockTuitions.find((m: any) => m.id === jobId || m.jobCode === jobId || m.realId === jobId);
 
+      // 6. Build application with full tutor profile automatically
       const newMockApp = {
         id: 'APP-' + Date.now(),
         tuitionId: jobId,
+        jobCode: mock?.jobCode || jobId,
         tutorId: tutorObj.id || tutorObj.tutorCode,
         tutorCode: tutorObj.tutorCode || tutorObj.id,
-        name: tutorObj.fullName || tutorObj.name,
-        phone: tutorObj.phone || applicantPhone,
-        email: tutorObj.email || applicantEmail,
+        name: applicantName,
+        phone: applicantPhone,
+        email: applicantEmail,
         gender: tutorObj.gender || 'Any',
-        university: tutorObj.university || applicantUni,
-        department: tutorObj.department || applicantDept,
+        university: applicantUni,
+        department: applicantDept,
         studentId: tutorObj.studentId || 'N/A',
         academicYear: tutorObj.academicYear || '3rd Year',
         district: tutorObj.district || 'Dhaka',
@@ -1213,27 +1296,26 @@ async function startServer() {
         subjects: tutorObj.subjects || ['All Subjects'],
         verificationStatus: tutorObj.verificationStatus || 'verified',
         status: tutorObj.status || 'active',
-        expectedSalary: salaryVal,
+        expectedSalary: salaryVal || (mock?.salary ? parseInt(mock.salary) : null),
         message: notes || 'Dedicated tutor ready to help the student excel.',
         appliedAt: new Date().toISOString()
       };
       mockApplications.unshift(newMockApp);
 
-      const mock = mockTuitions.find((m: any) => m.id === jobId || m.jobCode === jobId);
       if (mock) {
         mock.applications = (mock.applications || 0) + 1;
         if (mock.status === 'OPEN') mock.status = 'TEACHERS_APPLIED';
       }
 
-      // 4. Trigger Teacher Application Alert for Admin
+      // 7. Trigger Teacher Application Alert for Admin
       const newAlert = {
         id: 'ALERT-' + Date.now(),
         jobId: jobId,
         jobTitle: mock?.title || 'Tuition Job ' + jobId,
         tutorId: tutorObj.id || tutorObj.tutorCode,
-        tutorName: tutorObj.fullName || tutorObj.name,
-        tutorUniversity: tutorObj.university || applicantUni,
-        tutorDepartment: tutorObj.department || applicantDept,
+        tutorName: applicantName,
+        tutorUniversity: applicantUni,
+        tutorDepartment: applicantDept,
         expectedSalary: salaryVal,
         timestamp: new Date().toISOString(),
         isRead: false
@@ -1249,6 +1331,7 @@ async function startServer() {
 
       res.json({ 
         success: true, 
+        message: "Application submitted successfully! Your profile is now visible to the administrator.",
         application: appResult || newMockApp,
         totalApplications: mock ? mock.applications : 1,
         jobId,
