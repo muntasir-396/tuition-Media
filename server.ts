@@ -20,6 +20,7 @@ const mapTuitionToOld = (t: any): any => {
   if (t.status === 'closed') oldStatus = 'ARCHIVED';
   if (t.status === 'pending_review' || t.status === 'draft') oldStatus = 'PENDING_REVIEW';
   if (t.status === 'open') oldStatus = 'OPEN';
+  if (t.status === 'demo_scheduled' || t.status === 'DEMO_SCHEDULED') oldStatus = 'DEMO_SCHEDULED';
 
   let guestName: any = null;
   let guestPhone: any = null;
@@ -86,6 +87,10 @@ const mapTuitionToOld = (t: any): any => {
     adminNotes: t.adminNotes || '',
     assignedTutorId: t.assignedTutorId || '',
     confirmedStartDate: t.confirmedStartDate || '',
+    demoSchedule: t.demoSchedule || '',
+    demoTutor: t.demoTutor || '',
+    demoTutorName: t.demoTutorName || '',
+    demoTutorPhone: t.demoTutorPhone || '',
   };
 };
 
@@ -2080,6 +2085,9 @@ async function startServer() {
         mockT.status = 'DEMO_SCHEDULED';
         mockT.demoSchedule = demoDate;
         mockT.assignedTutorId = tutorCode;
+        mockT.demoTutor = tutorCode;
+        mockT.demoTutorName = tutorName;
+        mockT.demoTutorPhone = tutorPhone;
         mockT.updatedAt = new Date().toISOString();
       }
 
@@ -2117,6 +2125,39 @@ async function startServer() {
     } catch (e: any) {
       console.error("Schedule demo error:", e);
       res.status(500).json({ error: e.message || "Failed to schedule demo" });
+    }
+  });
+
+  // Get demos for a specific tuition
+  app.get("/api/admin/tuitions/:id/demos", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const matched = mockDemos.filter((d: any) => 
+        d.tuitionId === id || d.jobCode === id || (id && String(d.tuitionId).includes(id)) || (id && String(d.jobCode).includes(id))
+      );
+      res.json({ demos: matched });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Failed to load demos" });
+    }
+  });
+
+  // Create payment record when tuition is confirmed
+  app.post("/api/admin/payments", async (req, res) => {
+    try {
+      const { tuitionId, tutorId, amount, date, method, status } = req.body;
+      const newPayment = {
+        id: 'PAY-' + Date.now(),
+        tuitionId: tuitionId || '',
+        tutorId: tutorId || '',
+        amount: Number(amount) || 0,
+        method: method || 'Cash / Mobile Banking',
+        status: status || 'Pending',
+        date: date || new Date().toISOString()
+      };
+      mockPayments.unshift(newPayment);
+      res.json({ success: true, payment: newPayment });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Failed to create payment" });
     }
   });
 
