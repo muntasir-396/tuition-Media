@@ -173,13 +173,14 @@ export const AdminTuitionsView: React.FC = () => {
       });
       if (response.ok) {
         const updatedData = allTuitionsData.map(t => {
-          if (t.id === id) {
+          if (t.id === id || t.jobCode === id || t.realId === id) {
             return { ...t, status: targetStatus, ...extraPayload, updatedAt: new Date().toISOString() };
           }
           return t;
         });
         saveToStorage(updatedData);
         alert(`Success: Tuition status updated to ${targetStatus}!`);
+        await fetchTuitions();
       } else {
         alert('Failed to update status on server');
       }
@@ -245,6 +246,7 @@ export const AdminTuitionsView: React.FC = () => {
           saveToStorage([created, ...allTuitionsData]);
           setActiveTab('Open');
           alert('Success: New tuition created and published to Tuition Jobs!');
+          await fetchTuitions();
         } else {
           // Fallback locally
           const newId = `JOB-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -265,6 +267,13 @@ export const AdminTuitionsView: React.FC = () => {
       }
     } else {
       try {
+        if (formData.status) {
+          await fetch(`/api/admin/tuitions/${formData.id}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: formData.status, targetStatus: formData.status })
+          });
+        }
         await fetch(`/api/admin/tuitions/${formData.id}/edit`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -274,11 +283,12 @@ export const AdminTuitionsView: React.FC = () => {
         console.error(err);
       }
       const updatedData = allTuitionsData.map(t => {
-        if (t.id === formData.id) return { ...formData, updatedAt: new Date().toISOString() };
+        if (t.id === formData.id || t.jobCode === formData.id || t.realId === formData.id) return { ...formData, updatedAt: new Date().toISOString() };
         return t;
       });
       saveToStorage(updatedData);
       alert('Success: Tuition updated successfully!');
+      await fetchTuitions();
     }
     setIsEditModalOpen(false);
   };

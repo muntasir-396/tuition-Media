@@ -112,9 +112,26 @@ export const AdminTuitionDetailsView: React.FC = () => {
   
   const updateTuitionInStorage = async (updatedFields: any) => {
     try {
-      // If we don't have a tuition object, we can't update it
       if (!tuition || !tuition.id) return;
-      const realId = tuition.realId || tuition.id; // use realId if fetched from All
+      const primaryId = tuition.id || adminSelectedTuitionId;
+      const realId = tuition.realId || tuition.id;
+
+      if (updatedFields.status) {
+        try {
+          await fetch(`/api/admin/tuitions/${primaryId}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: updatedFields.status, targetStatus: updatedFields.status })
+          });
+          if (realId && realId !== primaryId) {
+            await fetch(`/api/admin/tuitions/${realId}/status`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: updatedFields.status, targetStatus: updatedFields.status })
+            });
+          }
+        } catch (e) {}
+      }
 
       const response = await fetch(`/api/admin/tuitions/${realId}/edit`, {
         method: 'PUT',
@@ -122,7 +139,6 @@ export const AdminTuitionDetailsView: React.FC = () => {
         body: JSON.stringify(updatedFields)
       });
       if (response.ok) {
-        // optimistically update local state if needed
         setTuition((prev: any) => ({ ...prev, ...updatedFields }));
       }
     } catch (e) {
@@ -133,7 +149,8 @@ export const AdminTuitionDetailsView: React.FC = () => {
   const handleSaveModal = async (formData: any) => {
     await updateTuitionInStorage(formData);
     setIsEditModalOpen(false);
-    fetchTuitionDetails();
+    await fetchTuitionDetails();
+    alert('Success: Tuition details and status updated!');
   };
 
   const handleSaveDetails = async () => {
@@ -146,13 +163,43 @@ export const AdminTuitionDetailsView: React.FC = () => {
       location: address,
       adminNotes
     });
-    fetchTuitionDetails();
+    await fetchTuitionDetails();
     setSavingDetails(false);
+    alert('Success: Guardian details saved!');
   };
 
   const handleStatusUpdate = async (status: string) => {
-    await updateTuitionInStorage({ status });
-    fetchTuitionDetails();
+    try {
+      const primaryId = tuition?.id || adminSelectedTuitionId;
+      const realId = tuition?.realId || tuition?.id;
+
+      await fetch(`/api/admin/tuitions/${primaryId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, targetStatus: status })
+      });
+
+      if (realId && realId !== primaryId) {
+        await fetch(`/api/admin/tuitions/${realId}/status`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status, targetStatus: status })
+        });
+      }
+
+      await updateTuitionInStorage({ status });
+      setTuition((prev: any) => prev ? { ...prev, status } : prev);
+      await fetchTuitionDetails();
+      
+      if (status === 'OPEN') {
+        alert('Success: Tuition approved! It is now published and live for tutors to view and apply.');
+      } else {
+        alert(`Tuition status updated to ${status}`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error updating status');
+    }
   };
 
   const handleArchive = async () => {
@@ -432,10 +479,32 @@ export const AdminTuitionDetailsView: React.FC = () => {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
              <div className="flex items-center justify-between mb-2">
                <span className="text-sm font-bold text-slate-700 flex items-center gap-1.5"><Activity className="w-4 h-4"/> Status</span>
-               <span className="px-2.5 py-1 bg-slate-100 text-slate-700 font-black text-xs rounded-lg uppercase">{tuition.status}</span>
-
-
+               <span className={`px-2.5 py-1 font-black text-xs rounded-lg uppercase ${
+                 tuition.status === 'PENDING_REVIEW' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                 tuition.status === 'OPEN' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
+                 'bg-slate-100 text-slate-700'
+               }`}>
+                 {tuition.status === 'PENDING_REVIEW' ? 'Pending Approval' : tuition.status}
+               </span>
              </div>
+
+             {/* Approve & Publish Button for Pending Tuitions */}
+             {tuition.status === 'PENDING_REVIEW' && (
+               <button 
+                 onClick={() => handleStatusUpdate('OPEN')} 
+                 className="w-full py-3 rounded-xl bg-[#10B981] hover:bg-[#059669] text-white font-black text-sm flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer"
+               >
+                 <CheckCircle className="w-5 h-5" /> Approve & Publish Tuition
+               </button>
+             )}
+
+             {tuition.status === 'OPEN' && (
+               <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2">
+                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                 <span>Published & Live on Tuition Jobs</span>
+               </div>
+             )}
+
              <button onClick={() => setShowConfirmModal(true)} className="w-full py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-bold text-sm border border-indigo-100 hover:bg-indigo-100 transition-colors">
                Close & Confirm Job
              </button>
@@ -446,9 +515,7 @@ export const AdminTuitionDetailsView: React.FC = () => {
                 <button onClick={() => setShowArchiveDialog(true)} className="w-full py-2 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs border border-slate-200 hover:bg-slate-200 transition-colors">
                   Archive Job
                 </button>
-
              </div>
-
           </div>
 
           {/* Interactive Workflow Buttons */}

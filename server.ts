@@ -742,6 +742,7 @@ async function startServer() {
   });
 
   app.get("/api/tuitions", async (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     try {
       const results = await db.select({
         t: tuitionRequests,
@@ -760,14 +761,20 @@ async function startServer() {
         appCount: r.appCount
       })).map(mapTuitionToOld);
 
-      const existingIds = new Set(dbTuitions.map((t: any) => t.id));
+      const existingIds = new Set<string>();
+      dbTuitions.forEach((t: any) => {
+        if (t.id) existingIds.add(String(t.id));
+        if (t.jobCode) existingIds.add(String(t.jobCode));
+        if (t.realId) existingIds.add(String(t.realId));
+      });
+
       const extraMocks = getMockTuitions()
-        .filter((t: any) => t.status === 'OPEN' || t.status === 'CONFIRMED' || t.status === 'TEACHERS_APPLIED')
-        .filter((m: any) => !existingIds.has(m.id) && !existingIds.has(m.jobCode));
+        .filter((t: any) => t.status === 'OPEN' || t.status === 'APPROVED' || t.status === 'CONFIRMED' || t.status === 'TEACHERS_APPLIED')
+        .filter((m: any) => !existingIds.has(String(m.id)) && !existingIds.has(String(m.jobCode)) && (!m.realId || !existingIds.has(String(m.realId))));
 
       res.json([...dbTuitions, ...extraMocks]);
     } catch (e) {
-      res.json(getMockTuitions().filter((t: any) => t.status === 'OPEN' || t.status === 'CONFIRMED' || t.status === 'TEACHERS_APPLIED'));
+      res.json(getMockTuitions().filter((t: any) => t.status === 'OPEN' || t.status === 'APPROVED' || t.status === 'CONFIRMED' || t.status === 'TEACHERS_APPLIED'));
     }
   });
 
@@ -1553,15 +1560,16 @@ async function startServer() {
       const { targetStatus, status, archiveReason, cancelReason } = req.body;
       const effectiveStatus = (targetStatus || status || '').toUpperCase();
       
-      const mockIdx = mockTuitions.findIndex((t: any) => t.id === id || t.jobCode === id);
+      const mockIdx = mockTuitions.findIndex((t: any) => t.id === id || t.jobCode === id || t.realId === id);
       if (mockIdx >= 0) {
         mockTuitions[mockIdx].status = effectiveStatus;
         if (archiveReason) mockTuitions[mockIdx].adminNotes = archiveReason;
         if (cancelReason) mockTuitions[mockIdx].adminNotes = cancelReason;
+        mockTuitions[mockIdx].updatedAt = new Date().toISOString();
       }
       
       let mappedStatus = 'open';
-      if (effectiveStatus === 'OPEN') mappedStatus = 'open';
+      if (effectiveStatus === 'OPEN' || effectiveStatus === 'APPROVED') mappedStatus = 'open';
       else if (effectiveStatus === 'CONFIRMED' || effectiveStatus === 'FILLED') mappedStatus = 'assigned';
       else if (effectiveStatus === 'ARCHIVED' || effectiveStatus === 'CLOSED') mappedStatus = 'cancelled';
       else if (effectiveStatus === 'CANCELLED') mappedStatus = 'cancelled';
@@ -1586,7 +1594,7 @@ async function startServer() {
         // If it was a mock item not yet in Supabase, persist it into Supabase now
         if (updated.length === 0 && mockIdx >= 0) {
           const mock = mockTuitions[mockIdx];
-          const salaryNum = parseInt(mock.salary?.toString().replace(/[^0-9]/g, '') || '4000');
+          const salaryNum = parseInt(mock.salary?.toString().replace(/[^0-9]/g, '') || '4000') || 4000;
           await db.insert(tuitionRequests).values({
             jobCode: mock.jobCode || mock.id,
             title: mock.title,
@@ -1790,29 +1798,125 @@ async function startServer() {
     try {
       const { id } = req.params;
       const updateData = req.body;
-      const mockIdx = mockTuitions.findIndex((t: any) => t.id === id || t.jobCode === id);
-      if (mockIdx >= 0) {
-        mockTuitions[mockIdx] = { ...mockTuitions[mockIdx], ...updateData };
+      const mockIdx = mockTuitions.findIndex((t: any) => t.id === id || t.jobCode === id || t.realId === id);
+      
+      const effectiveStatus = updateData.status ? (updateData.status || '').toUpperCase() : null;
+      let mappedStatus: string | undefined = undefined;
+      if (effectiveStatus) {
+        if (effectiveStatus === 'OPEN' || effectiveStatus === 'APPROVED') mappedStatus = 'open';
+        else if (effectiveStatus === 'CONFIRMED' || effectiveStatus === 'FILLED') mappedStatus = 'assigned';
+        else if (effectiveStatus === 'ARCHIVED' || effectiveStatus === 'CLOSED') mappedStatus = 'cancelled';
+        else if (effectiveStatus === 'CANCELLED') mappedStatus = 'cancelled';
+        else if (effectiveStatus === 'PENDING_REVIEW' || effectiveStatus === 'PENDING') mappedStatus = 'pending_review';
+        else mappedStatus = effectiveStatus.toLowerCase();
       }
+
+      if (mockIdx >= 0) {
+        mockTuitions[mockIdx] = { 
+          ...mockTuitions[mockIdx], 
+          ...updateData,
+          ...(effectiveStatus ? { status: effectiveStatus } : {}),
+          updatedAt: new Date().toISOString()
+        };
+      }
+
+      const dbSet: any = {
+        updatedAt: new Date()
+      };
+      if (updateData.title !== undefined) dbSet.title = updateData.title;
+      if (updateData.curriculum !== undefined || updateData.category !== undefined) {
+        dbSet.curriculum = updateData.curriculum || updateData.category;
+      }
+      if (updateData.course !== undefined || updateData.courseClass !== undefined) {
+        dbSet.courseClass = updateData.course || updateData.courseClass;
+      }
+      if (updateData.subjects !== undefined) {
+        dbSet.subjects = Array.isArray(updateData.subjects) 
+          ? updateData.subjects 
+          : (typeof updateData.subjects === 'string' ? updateData.subjects.split(',').map((s: string) => s.trim()).filter(Boolean) : [updateData.subjects]);
+      }
+      if (updateData.daysPerWeek !== undefined) dbSet.daysPerWeek = updateData.daysPerWeek;
+      if (updateData.time !== undefined || updateData.preferredTime !== undefined) {
+        dbSet.preferredTime = updateData.time || updateData.preferredTime;
+      }
+      if (updateData.duration !== undefined) dbSet.duration = updateData.duration;
+      if (updateData.method !== undefined) dbSet.method = updateData.method;
+      if (updateData.salary !== undefined) {
+        const salaryNum = parseInt(updateData.salary.toString().replace(/[^0-9]/g, '')) || null;
+        dbSet.salaryMin = salaryNum;
+        dbSet.salaryMax = salaryNum;
+      }
+      if (updateData.studentGender !== undefined) dbSet.studentGender = updateData.studentGender;
+      if (updateData.tutorGender !== undefined || updateData.preferredTutorGender !== undefined) {
+        dbSet.preferredTutorGender = updateData.tutorGender || updateData.preferredTutorGender;
+      }
+      if (updateData.notes !== undefined || updateData.parentSpecialInstructions !== undefined) {
+        dbSet.parentSpecialInstructions = updateData.notes || updateData.parentSpecialInstructions;
+      }
+      if (updateData.area !== undefined || updateData.location !== undefined) {
+        dbSet.area = updateData.area || updateData.location;
+      }
+      if (updateData.district !== undefined || updateData.city !== undefined) {
+        dbSet.district = updateData.district || updateData.city;
+      }
+      if (updateData.fullAddress !== undefined || updateData.location !== undefined) {
+        dbSet.fullAddress = updateData.fullAddress || updateData.location;
+      }
+      if (updateData.studentsCount !== undefined || updateData.studentCount !== undefined) {
+        dbSet.studentCount = parseInt(updateData.studentsCount?.toString() || updateData.studentCount?.toString() || '1') || 1;
+      }
+      if (mappedStatus !== undefined) {
+        dbSet.status = mappedStatus;
+        if (mappedStatus === 'open') {
+          dbSet.publishedAt = new Date();
+          dbSet.visibility = 'public';
+        }
+      }
+
       try {
-        await db.update(tuitionRequests).set({
-          title: updateData.title,
-          curriculum: updateData.curriculum || updateData.category,
-          courseClass: updateData.course || updateData.courseClass,
-          subjects: Array.isArray(updateData.subjects) ? updateData.subjects : (typeof updateData.subjects === 'string' ? updateData.subjects.split(',').map((s: string) => s.trim()) : undefined),
-          daysPerWeek: updateData.daysPerWeek,
-          preferredTime: updateData.time,
-          duration: updateData.duration,
-          method: updateData.method,
-          salaryMax: updateData.salary ? parseInt(updateData.salary.toString().replace(/[^0-9]/g, '')) : undefined,
-          studentGender: updateData.studentGender,
-          preferredTutorGender: updateData.tutorGender,
-          parentSpecialInstructions: updateData.notes,
-        }).where(sql`${tuitionRequests.id}::text = ${id} OR ${tuitionRequests.jobCode} = ${id}`);
-      } catch (err) {}
-      res.json({ success: true });
-    } catch (e) {
-      res.json({ success: true });
+        const updated = await db.update(tuitionRequests)
+          .set(dbSet)
+          .where(sql`${tuitionRequests.id}::text = ${id} OR ${tuitionRequests.jobCode} = ${id}`)
+          .returning();
+
+        // If not yet in DB, persist it
+        if (updated.length === 0 && mockIdx >= 0) {
+          const mock = mockTuitions[mockIdx];
+          const salaryNum = parseInt(mock.salary?.toString().replace(/[^0-9]/g, '') || '4000') || 4000;
+          const statusToUse = mappedStatus || (mock.status === 'PENDING_REVIEW' ? 'pending_review' : 'open');
+          await db.insert(tuitionRequests).values({
+            jobCode: mock.jobCode || mock.id,
+            title: mock.title,
+            curriculum: mock.curriculum || mock.category || 'General',
+            courseClass: mock.course || mock.courseClass || 'General',
+            subjects: Array.isArray(mock.subjects) ? mock.subjects : [mock.subjects || 'General'],
+            daysPerWeek: mock.daysPerWeek || '3 days',
+            preferredTime: mock.preferredTime || mock.time || 'Flexible',
+            duration: mock.duration || '1 Hour',
+            method: mock.method || 'Home Tutoring',
+            salaryMin: salaryNum,
+            salaryMax: salaryNum,
+            district: mock.district || mock.city || 'Dhaka',
+            area: mock.area || mock.location || 'Dhaka',
+            fullAddress: mock.fullAddress || mock.location || 'Dhaka',
+            parentSpecialInstructions: mock.notes || '',
+            studentGender: mock.studentGender || 'Mix',
+            preferredTutorGender: mock.preferredTutorGender || mock.tutorGender || 'Any',
+            studentCount: parseInt(mock.studentCount?.toString() || '1') || 1,
+            status: statusToUse,
+            visibility: 'public',
+            publishedAt: statusToUse === 'open' ? new Date() : null,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+        }
+      } catch (err) {
+        console.error("DB tuition edit error:", err);
+      }
+      res.json({ success: true, status: effectiveStatus });
+    } catch (e: any) {
+      console.error(e);
+      res.status(500).json({ error: e.message || "Failed to edit tuition" });
     }
   });
 
