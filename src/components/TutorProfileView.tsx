@@ -108,6 +108,20 @@ export const TutorProfileView: React.FC = () => {
   const isParent = currentUser?.role === 'parent' || viewAsParent;
   const isBlocked = tutor.status === 'blocked' || tutor.status === 'suspended';
 
+  const [myDemos, setMyDemos] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (tutor && (isOwner || currentUser?.role === 'tutor')) {
+      const code = tutor.tutorCode || tutor.id;
+      fetch(`/api/tutor/my-demos?tutorId=${code}`, { credentials: 'include' })
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.demos) setMyDemos(data.demos);
+        })
+        .catch(() => {});
+    }
+  }, [tutor, isOwner, currentUser]);
+
   const handleBlockToggle = async () => {
     if (!isAdmin) return;
     const newStatus = isBlocked ? 'active' : 'blocked';
@@ -346,6 +360,76 @@ export const TutorProfileView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Assigned Demo Classes Section for Tutor */}
+      {(isOwner || currentUser?.role === 'tutor') && myDemos.length > 0 && (
+        <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 rounded-3xl p-6 text-white shadow-lg space-y-4 border border-indigo-700/50">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 text-indigo-300">
+                <Calendar className="w-6 h-6 text-indigo-400" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base sm:text-lg text-white">Assigned Trial / Demo Classes</h3>
+                <p className="text-xs text-indigo-200">Scheduled by Admin with Guardian for Trial Class</p>
+              </div>
+            </div>
+            <span className="self-start sm:self-auto px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold text-xs flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>{myDemos.length} Scheduled</span>
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+            {myDemos.map((demo: any) => (
+              <div key={demo.id} className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 space-y-3 hover:border-indigo-400/40 transition-colors">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className="px-2 py-0.5 rounded-md bg-[#84CC16] text-slate-950 font-black text-[10px] tracking-wide">
+                      Job ID: {demo.jobCode || demo.tuitionId}
+                    </span>
+                    <h4 className="font-bold text-sm text-white mt-1.5">{demo.guardianName || 'Guardian'}</h4>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-extrabold">
+                    {demo.status || 'Scheduled'}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 text-xs text-indigo-100 font-medium">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span>Demo Date: <strong className="text-white">{new Date(demo.date || demo.scheduledDate).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</strong></span>
+                  </div>
+                  {demo.guardianPhone && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Guardian Phone: <strong className="text-white">{demo.guardianPhone}</strong></span>
+                    </div>
+                  )}
+                  {demo.location && (
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span className="truncate">Location: {demo.location}</span>
+                    </div>
+                  )}
+                </div>
+
+                {demo.guardianPhone && (
+                  <div className="pt-2 border-t border-white/10 flex gap-2">
+                    <a
+                      href={`tel:${demo.guardianPhone}`}
+                      className="flex-1 py-2 rounded-xl bg-[#84CC16] hover:bg-[#65A30D] text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <Phone className="w-3.5 h-3.5" />
+                      <span>Call Guardian</span>
+                    </a>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 2. Personal Information Card */}
       <div className="bg-white rounded-3xl border border-slate-300 overflow-hidden shadow-xs">

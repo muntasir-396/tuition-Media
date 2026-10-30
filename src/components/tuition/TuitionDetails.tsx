@@ -58,9 +58,15 @@ export const TuitionDetails: React.FC<TuitionDetailsProps> = ({
               </span>
             </div>
           </div>
-          <span className="self-start sm:self-auto px-3 py-1 rounded-full bg-lime-50 border border-lime-200 text-[#65A30D] text-xs font-bold">
-            Job ID: {job.id}
-          </span>
+          <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+            <span className="px-3 py-1 rounded-full bg-lime-50 border border-lime-200 text-[#65A30D] text-xs font-bold">
+              Job ID: {job.id}
+            </span>
+            <span className="px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold flex items-center gap-1.5">
+              <Users2 className="w-3.5 h-3.5" />
+              <span>{(job.applications || (job.appliedTutors ? job.appliedTutors.length : 0) || 0)} Applicant{(job.applications || (job.appliedTutors ? job.appliedTutors.length : 0) || 0) === 1 ? '' : 's'}</span>
+            </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
@@ -320,7 +326,7 @@ export const TuitionDetails: React.FC<TuitionDetailsProps> = ({
         <div className="flex items-center gap-2">
           <Send className="w-4 h-4 text-[#84CC16]" />
           <span className="text-slate-400">Total Applications:</span>
-          <span className="text-slate-900">{job.applications}</span>
+          <span className="text-slate-900 font-extrabold">{job.applications || (job.appliedTutors ? job.appliedTutors.length : 0) || 0}</span>
         </div>
       </div>
     </div>

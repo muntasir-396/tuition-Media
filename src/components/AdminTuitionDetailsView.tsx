@@ -35,6 +35,40 @@ export const AdminTuitionDetailsView: React.FC = () => {
   const [confirmStartDate, setConfirmStartDate] = useState('');
   const [confirmPaymentAmount, setConfirmPaymentAmount] = useState('');
   const [confirmPaymentDate, setConfirmPaymentDate] = useState('');
+  const [isSchedulingDemo, setIsSchedulingDemo] = useState(false);
+
+  const handleScheduleDemoSubmit = async () => {
+    if (!demoTutor || !demoDate) {
+      alert("Please select a tutor and choose a date & time for the demo class.");
+      return;
+    }
+    setIsSchedulingDemo(true);
+    try {
+      const primaryId = tuition.id || adminSelectedTuitionId;
+      const res = await fetch(`/api/admin/tuitions/${primaryId}/schedule-demo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tutorId: demoTutor,
+          demoDate: demoDate
+        })
+      });
+
+      if (res.ok) {
+        setShowDemoSchedule(false);
+        alert(`Success: Demo class scheduled for ${new Date(demoDate).toLocaleString()}! The tutor has received an instant notification.`);
+        await fetchTuitionDetails();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to schedule demo');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error scheduling demo');
+    } finally {
+      setIsSchedulingDemo(false);
+    }
+  };
 
   const handleBlockApplicantTutor = async (tutor: any) => {
     const isCurrentlyBlocked = tutor.status === 'blocked';
@@ -974,7 +1008,10 @@ export const AdminTuitionDetailsView: React.FC = () => {
                  <label className="block text-xs font-bold text-slate-500 mb-1">Select Tutor</label>
                  <select value={demoTutor} onChange={e => setDemoTutor(e.target.value)} className="w-full p-2.5 rounded-xl border border-slate-200 text-sm font-medium">
                    <option value="">-- Select Tutor --</option>
-                   {appliedTutors.map(t => <option key={t.id} value={t.id}>{t.name} ({t.id})</option>)}
+                   {appliedTutors.map(t => {
+                     const val = t.tutorCode || t.tutorId || t.id;
+                     return <option key={t.id} value={val}>{t.name} ({val})</option>;
+                   })}
                  </select>
                </div>
                <div>
@@ -982,15 +1019,12 @@ export const AdminTuitionDetailsView: React.FC = () => {
                  <input type="datetime-local" value={demoDate} onChange={e => setDemoDate(e.target.value)} className="w-full p-2.5 rounded-xl border border-slate-200 text-sm font-medium" />
                </div>
                <button 
-                 onClick={() => {
-                    // Logic to schedule demo
-                    setShowDemoSchedule(false);
-                    // Could trigger handleStatusUpdate to DEMO_SCHEDULED here in a real scenario
-                 }}
-                 disabled={!demoTutor || !demoDate}
-                 className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition-colors"
+                 onClick={handleScheduleDemoSubmit}
+                 disabled={!demoTutor || !demoDate || isSchedulingDemo}
+                 className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-black rounded-xl text-sm transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-sm"
                >
-                 Schedule Demo
+                 <Calendar className="w-4 h-4" />
+                 <span>{isSchedulingDemo ? 'Scheduling & Notifying Tutor...' : 'Schedule Demo'}</span>
                </button>
              </div>
 

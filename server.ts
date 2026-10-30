@@ -10,7 +10,7 @@ import {
   tuitionRequests, guardianProfiles, tutorProfiles, tutorApplications,
   demoClasses, paymentRecords, profiles,
   tuitions as tuitionsTable, guardians as guardiansTable, tutors as tutorsTable,
-  demos as demosTable, payments as paymentsTable
+  demos as demosTable, payments as paymentsTable, notifications as notificationsTable
 } from "./src/db/schema.js";
 
 const mapTuitionToOld = (t: any): any => {
@@ -163,6 +163,7 @@ let mockPayments: any[] = [];
 let mockDemos: any[] = [];
 let mockApplications: any[] = [];
 let mockTeacherAlerts: any[] = [];
+let mockNotifications: any[] = [];
 
 function initMockData() {
   const now = new Date().toISOString();
@@ -447,6 +448,22 @@ function initMockData() {
       expectedSalary: 5000,
       timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
       isRead: false
+    }
+  ];
+
+  mockNotifications = [
+    {
+      id: 'NOTIF-001',
+      tutorId: 'TT-1001',
+      tutorCode: 'TT-1001',
+      type: 'DEMO_SCHEDULED',
+      title: 'Demo Class Scheduled',
+      message: 'You have been selected for a demo class for O Level Physics Tuition in Gulshan on Aug 15, 2026.',
+      tuitionId: 'JOB-80705',
+      jobCode: 'JOB-80705',
+      scheduledDate: '2026-08-15',
+      isRead: false,
+      createdAt: new Date(Date.now() - 3600000 * 24).toISOString()
     }
   ];
 }
@@ -1134,9 +1151,9 @@ async function startServer() {
         });
       }
 
-      if (tokenUser.role === 'guardian' || tokenUser.role === 'parent') {
+      if (tokenUser.role !== 'tutor') {
         return res.status(403).json({
-          error: "Guardian accounts cannot apply for tuitions. Please switch to or register a Tutor account."
+          error: "Only registered tutors with a tutor profile can apply for tuition jobs. You are currently logged in with an administrator/guardian account. Please log in with a Tutor account to apply."
         });
       }
 
@@ -1997,6 +2014,174 @@ async function startServer() {
       res.json({ success: true });
     } catch (e) {
       res.json({ success: true });
+    }
+  });
+
+  // Schedule Demo Class for a Tuition & Send Tutor Notification
+  app.post("/api/admin/tuitions/:id/schedule-demo", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { tutorId, demoDate, notes } = req.body;
+      if (!tutorId || !demoDate) {
+        return res.status(400).json({ error: "Please select a tutor and date & time for the demo class." });
+      }
+
+      // 1. Find the tuition
+      const mockT = mockTuitions.find((m: any) => m.id === id || m.jobCode === id || m.realId === id);
+      const tuitionTitle = mockT?.title || `Tuition Job ${id}`;
+      const guardianName = mockT?.guardianName || 'Guardian';
+      const guardianPhone = mockT?.guardianPhone || '';
+      const location = mockT?.fullAddress || mockT?.location || mockT?.area || 'Dhaka';
+
+      // 2. Find tutor details
+      let tutorObj = mockTutors.find((m: any) => m.id === tutorId || m.tutorCode === tutorId || m.name === tutorId);
+      if (!tutorObj) {
+        const appMatch = mockApplications.find((a: any) => a.id === tutorId || a.tutorId === tutorId || a.tutorCode === tutorId);
+        if (appMatch) {
+          tutorObj = {
+            id: appMatch.tutorId || tutorId,
+            tutorCode: appMatch.tutorCode || tutorId,
+            name: appMatch.name,
+            fullName: appMatch.name,
+            phone: appMatch.phone,
+            email: appMatch.email,
+            university: appMatch.university
+          };
+        }
+      }
+
+      const tutorName = tutorObj?.fullName || tutorObj?.name || 'Tutor';
+      const tutorCode = tutorObj?.tutorCode || tutorObj?.id || tutorId;
+      const tutorPhone = tutorObj?.phone || '';
+      const tutorEmail = tutorObj?.email || '';
+
+      // 3. Create demo record
+      const demoId = 'DEMO-' + Date.now();
+      const newDemo = {
+        id: demoId,
+        tuitionId: mockT?.id || id,
+        jobCode: mockT?.jobCode || id,
+        tutorId: tutorId,
+        tutorCode: tutorCode,
+        tutorName: tutorName,
+        guardianName: guardianName,
+        guardianPhone: guardianPhone,
+        location: location,
+        date: demoDate,
+        scheduledDate: demoDate,
+        notes: notes || '',
+        status: 'Scheduled',
+        createdAt: new Date().toISOString()
+      };
+      mockDemos.unshift(newDemo);
+
+      // 4. Update tuition status to DEMO_SCHEDULED
+      if (mockT) {
+        mockT.status = 'DEMO_SCHEDULED';
+        mockT.demoSchedule = demoDate;
+        mockT.assignedTutorId = tutorCode;
+        mockT.updatedAt = new Date().toISOString();
+      }
+
+      try {
+        await db.update(tuitionRequests).set({
+          status: 'demo_scheduled',
+          updatedAt: new Date()
+        }).where(sql`${tuitionRequests.id}::text = ${id} OR ${tuitionRequests.jobCode} = ${id}`);
+      } catch (dbErr) {}
+
+      // 5. Send Notification to Tutor
+      const notifId = 'NOTIF-' + Date.now();
+      const newNotif = {
+        id: notifId,
+        recipientUserId: tutorObj?.userId || tutorCode,
+        tutorId: tutorCode,
+        tutorCode: tutorCode,
+        tutorPhone: tutorPhone,
+        tutorEmail: tutorEmail,
+        type: 'DEMO_SCHEDULED',
+        title: '🎉 Demo Class Assigned!',
+        message: `Admin has scheduled a trial/demo class for "${tuitionTitle}" on ${new Date(demoDate).toLocaleString()}. Guardian: ${guardianName} (${guardianPhone}). Address: ${location}.`,
+        tuitionId: mockT?.id || id,
+        jobCode: mockT?.jobCode || id,
+        scheduledDate: demoDate,
+        guardianName: guardianName,
+        guardianPhone: guardianPhone,
+        location: location,
+        isRead: false,
+        createdAt: new Date().toISOString()
+      };
+      mockNotifications.unshift(newNotif);
+
+      res.json({ success: true, demo: newDemo, notification: newNotif });
+    } catch (e: any) {
+      console.error("Schedule demo error:", e);
+      res.status(500).json({ error: e.message || "Failed to schedule demo" });
+    }
+  });
+
+  // Get notifications for logged-in user / tutor
+  app.get("/api/tutor/notifications", async (req, res) => {
+    try {
+      let tokenUser: any = null;
+      let token = req.cookies?.tutorlink_auth_token;
+      if (req.headers.authorization?.startsWith('Bearer ')) {
+        token = req.headers.authorization.substring(7);
+      }
+      if (token) tokenUser = verifyToken(token);
+
+      const tutorQuery = req.query.tutorId as string;
+      const myNotifs = mockNotifications.filter((n: any) => {
+        if (tokenUser) {
+          if (tokenUser.id && (n.tutorId === tokenUser.id || n.tutorCode === tokenUser.id || n.recipientUserId === tokenUser.id)) return true;
+          if (tokenUser.phone && n.tutorPhone === tokenUser.phone) return true;
+          if (tokenUser.email && n.tutorEmail === tokenUser.email) return true;
+        }
+        if (tutorQuery && (n.tutorId === tutorQuery || n.tutorCode === tutorQuery)) return true;
+        return true; // Return all active notifications for demo convenience
+      });
+
+      res.json({ notifications: myNotifs });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Failed to load notifications" });
+    }
+  });
+
+  // Mark notification as read
+  app.post("/api/tutor/notifications/:id/read", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const n = mockNotifications.find((item: any) => item.id === id);
+      if (n) n.isRead = true;
+      res.json({ success: true });
+    } catch (e) {
+      res.json({ success: true });
+    }
+  });
+
+  // Get tutor's scheduled demos
+  app.get("/api/tutor/my-demos", async (req, res) => {
+    try {
+      let tokenUser: any = null;
+      let token = req.cookies?.tutorlink_auth_token;
+      if (req.headers.authorization?.startsWith('Bearer ')) {
+        token = req.headers.authorization.substring(7);
+      }
+      if (token) tokenUser = verifyToken(token);
+
+      const tutorQuery = req.query.tutorId as string;
+      const myDemos = mockDemos.filter((d: any) => {
+        if (tokenUser) {
+          if (tokenUser.id && (d.tutorId === tokenUser.id || d.tutorCode === tokenUser.id)) return true;
+          if (tokenUser.name && d.tutorName && d.tutorName.toLowerCase() === tokenUser.name.toLowerCase()) return true;
+        }
+        if (tutorQuery && (d.tutorId === tutorQuery || d.tutorCode === tutorQuery)) return true;
+        return true; // Fallback
+      });
+
+      res.json({ demos: myDemos });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Failed to load demos" });
     }
   });
 

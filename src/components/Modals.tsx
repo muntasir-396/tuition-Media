@@ -40,6 +40,7 @@ export const Modals: React.FC = () => {
     isLoggedIn,
     appliedJobIds,
     setActiveTab,
+    handleLogout,
   } = useApp();
 
   const [applyNotes, setApplyNotes] = useState('');
@@ -74,6 +75,10 @@ export const Modals: React.FC = () => {
     setApplyError(null);
     if (!isLoggedIn) {
       setApplyError('You must sign up and log in as a tutor to apply for tuition jobs.');
+      return;
+    }
+    if (currentUser?.role !== 'tutor') {
+      setApplyError('Only registered tutors with a tutor profile can apply for tuition jobs. You are currently logged in as ' + (currentUser?.role || 'an administrator/parent') + '.');
       return;
     }
     if (jobToApply) {
@@ -300,6 +305,49 @@ export const Modals: React.FC = () => {
                     className="w-full sm:w-1/2 py-2.5 rounded-xl bg-[#84CC16] hover:bg-[#65A30D] text-slate-950 font-black text-xs transition-colors cursor-pointer shadow-xs"
                   >
                     Register as Tutor
+                  </button>
+                </div>
+              </div>
+            ) : currentUser?.role !== 'tutor' ? (
+              <div className="py-5 text-center space-y-4">
+                <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto shadow-xs">
+                  <Lock className="w-7 h-7" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-black text-slate-900 text-lg">Tutor Account Required</h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Job ID: <strong className="text-slate-800">{jobToApply.id}</strong> • {jobToApply.title}
+                  </p>
+                </div>
+
+                <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-2xl text-left text-xs text-amber-900 space-y-2">
+                  <div className="flex items-center gap-2 font-bold text-amber-950">
+                    <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Signed in as: {currentUser?.name || 'User'} ({currentUser?.role === 'super-admin' || currentUser?.role === 'admin' ? 'Administrator' : 'Guardian'})</span>
+                  </div>
+                  <p className="text-amber-800 text-[11.5px] leading-relaxed">
+                    Tuition job applications can only be submitted by registered tutors who have created a tutor profile. Applications from Admin, Super Admin, or Guardian accounts are restricted to preserve authentic tutor records.
+                  </p>
+                </div>
+
+                <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await handleLogout();
+                      setIsApplyModalOpen(false);
+                      setActiveTab('login');
+                    }}
+                    className="w-full sm:w-1/2 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs transition-colors cursor-pointer"
+                  >
+                    Switch to Tutor Account
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsApplyModalOpen(false)}
+                    className="w-full sm:w-1/2 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                  >
+                    Close
                   </button>
                 </div>
               </div>

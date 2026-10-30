@@ -1,9 +1,62 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { Menu, Globe, User, GraduationCap, CheckCircle2 } from 'lucide-react';
+import { Menu, Globe, User, GraduationCap, CheckCircle2, Bell, Check, Calendar, Phone, MapPin, X } from 'lucide-react';
 
 export const Header: React.FC = () => {
-  const { language, setLanguage, setIsDrawerOpen, isLoggedIn, currentUser, setActiveTab } = useApp();
+  const { language, setLanguage, setIsDrawerOpen, isLoggedIn, currentUser, setActiveTab, setSelectedJob } = useApp();
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch('/api/tutor/notifications', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.notifications || []);
+      }
+    } catch (e) {
+      // quiet catch
+    }
+  };
+
+  useEffect(() => {
+    if (isLoggedIn && currentUser?.role === 'tutor') {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 20000);
+      return () => clearInterval(interval);
+    }
+  }, [isLoggedIn, currentUser]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsNotifOpen(false);
+      }
+    };
+    if (isNotifOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isNotifOpen]);
+
+  const markAsRead = async (id: string) => {
+    try {
+      await fetch(`/api/tutor/notifications/${id}/read`, { method: 'POST', credentials: 'include' });
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+    } catch (e) {}
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      for (const n of notifications.filter(item => !item.isRead)) {
+        await fetch(`/api/tutor/notifications/${n.id}/read`, { method: 'POST', credentials: 'include' });
+      }
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    } catch (e) {}
+  };
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-xs">
@@ -43,6 +96,110 @@ export const Header: React.FC = () => {
                 <span>{language === 'EN' ? 'ENG' : 'বাংলা'}</span>
               </button>
             </div>
+
+            {/* Notification Bell for Tutors */}
+            {isLoggedIn && currentUser?.role === 'tutor' && (
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => {
+                    setIsNotifOpen(!isNotifOpen);
+                    fetchNotifications();
+                  }}
+                  className="relative p-2 rounded-full border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer"
+                  title="Notifications"
+                >
+                  <Bell className="w-4 h-4 text-slate-700" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white font-extrabold text-[9px] leading-none animate-pulse">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Notifications Dropdown */}
+                {isNotifOpen && (
+                  <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 py-3 z-50 animate-in fade-in slide-in-from-top-2">
+                    <div className="px-4 pb-2 border-b border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Bell className="w-4 h-4 text-[#84CC16]" />
+                        <h4 className="font-extrabold text-sm text-slate-900">Notifications</h4>
+                        {unreadCount > 0 && (
+                          <span className="px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[10px] font-bold">
+                            {unreadCount} new
+                          </span>
+                        )}
+                      </div>
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={markAllAsRead}
+                          className="text-[11px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                        >
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 px-2 py-1">
+                      {notifications.length === 0 ? (
+                        <div className="py-8 text-center text-xs text-slate-400 font-medium">
+                          No notifications yet
+                        </div>
+                      ) : (
+                        notifications.map((n) => (
+                          <div
+                            key={n.id}
+                            onClick={() => {
+                              markAsRead(n.id);
+                              if (n.tuitionId) {
+                                setActiveTab('profile');
+                                setIsNotifOpen(false);
+                              }
+                            }}
+                            className={`p-3 rounded-xl transition-colors cursor-pointer text-left space-y-1 ${
+                              n.isRead ? 'bg-white hover:bg-slate-50 opacity-80' : 'bg-lime-50/50 hover:bg-lime-50 border-l-3 border-[#84CC16]'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-1.5">
+                              <h5 className="font-bold text-xs text-slate-900">{n.title}</h5>
+                              <span className="text-[10px] text-slate-400 shrink-0">
+                                {n.createdAt ? new Date(n.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Now'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-600 leading-snug">{n.message}</p>
+                            {n.scheduledDate && (
+                              <div className="pt-1 flex items-center gap-3 text-[11px] text-slate-500 font-semibold flex-wrap">
+                                <span className="flex items-center gap-1 text-slate-700">
+                                  <Calendar className="w-3.5 h-3.5 text-[#84CC16]" />
+                                  <span>{new Date(n.scheduledDate).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                                </span>
+                                {n.guardianPhone && (
+                                  <span className="flex items-center gap-1 text-slate-700">
+                                    <Phone className="w-3.5 h-3.5 text-blue-500" />
+                                    <span>{n.guardianPhone}</span>
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="pt-2 px-4 border-t border-slate-100 text-center">
+                      <button
+                        onClick={() => {
+                          setIsNotifOpen(false);
+                          setActiveTab('profile');
+                        }}
+                        className="text-xs font-bold text-[#84CC16] hover:text-[#65A30D] cursor-pointer"
+                      >
+                        View My Assigned Demos in Profile →
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Profile Pill (Desktop / Mobile Header) */}
             {isLoggedIn ? (
