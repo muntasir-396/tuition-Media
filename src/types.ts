@@ -1,4 +1,4 @@
-export type PageTab = 'home' | 'jobs' | 'tutors' | 'login' | 'menu' | 'job-details' | 'profile' | 'payment' | 'sms' | 'premium' | 'verify' | 'support' | 'admin-login' | 'admin-dashboard' | 'admin-tutors' | 'admin-guardians' | 'admin-tuitions' | 'admin-tuition-details' | 'admin-demos' | 'admin-payments' | 'admin-timeline' | 'admin-users' | 'request-tutor' | 'guardian-dashboard' | 'admin-pending-requests';
+export type PageTab = 'home' | 'jobs' | 'tutors' | 'login' | 'menu' | 'job-details' | 'profile' | 'payment' | 'sms' | 'premium' | 'verify' | 'support' | 'admin-login' | 'admin-dashboard' | 'admin-tutors' | 'admin-guardians' | 'admin-tuitions' | 'admin-tuition-details' | 'admin-demos' | 'admin-payments' | 'admin-timeline' | 'admin-users' | 'request-tutor' | 'guardian-dashboard' | 'admin-pending-requests' | 'tutor-profile' | 'tutor-saved-jobs' | 'guardian-saved-tutors';
 
 export type UserRole = 'parent' | 'tutor' | 'admin' | 'super-admin';
 
@@ -62,6 +62,33 @@ export interface TuitionJob {
   views: number;
   applications: number;
   isBookmarked?: boolean;
+  status?: TuitionStatus | string;
+  cancelReason?: string;
+  cancelledBy?: 'guardian' | 'admin' | 'tutor' | string;
+  cancelledAt?: string;
+  shortlistedTutorIds?: string[];
+}
+
+export type TuitionStatus = 
+  | 'PENDING'
+  | 'OPEN'
+  | 'TEACHERS_APPLIED'
+  | 'SHORTLISTED'
+  | 'DEMO_SCHEDULED'
+  | 'DEMO_DONE'
+  | 'CONFIRMED'
+  | 'ASSIGNED'
+  | 'CANCELLED'
+  | 'ARCHIVED';
+
+export interface AreaItem {
+  id: string;
+  division: string;
+  district: string;
+  thana: string;
+  nameEn: string;
+  nameBn?: string;
+  slug: string;
 }
 
 export interface TutorProfile {

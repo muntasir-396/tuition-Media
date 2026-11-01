@@ -3,15 +3,15 @@ import { ArrowLeft, CheckCircle2, Loader2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export const RequestTutorView: React.FC = () => {
-  const { setActiveTab } = useApp();
+  const { setActiveTab, currentUser } = useApp();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [successId, setSuccessId] = useState('');
   const [language, setLanguage] = useState<'EN' | 'BN'>('EN');
 
   const [formData, setFormData] = useState({
-    guardianName: '',
-    guardianEmail: '',
+    guardianName: currentUser?.name || '',
+    guardianEmail: currentUser?.email || '',
     location: '',
     course: '',
     subjects: '',
@@ -22,7 +22,7 @@ export const RequestTutorView: React.FC = () => {
     salary: '',
     studentsCount: '1',
     notes: '',
-    guardianPhone: ''
+    guardianPhone: currentUser?.phone || ''
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -131,10 +131,16 @@ export const RequestTutorView: React.FC = () => {
             </div>
           </div>
           
-          <div className="pt-6">
+          <div className="pt-6 flex flex-col sm:flex-row gap-3 justify-center">
+            <button 
+              onClick={() => setActiveTab('guardian-dashboard')}
+              className="px-6 py-3 bg-[#84CC16] text-white font-bold rounded-xl hover:bg-[#65A30D] transition-colors shadow-sm"
+            >
+              Go to Parent Dashboard
+            </button>
             <button 
               onClick={handleReset}
-              className="px-6 py-3 bg-[#84CC16] text-white font-bold rounded-xl hover:bg-[#65A30D] transition-colors"
+              className="px-6 py-3 border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors"
             >
               Submit Another Requirement
             </button>

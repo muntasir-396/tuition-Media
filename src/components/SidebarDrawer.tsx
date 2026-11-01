@@ -19,6 +19,7 @@ import {
   BookOpen,
   Award,
   Layers,
+  Bookmark,
 } from 'lucide-react';
 
 export const SidebarDrawer: React.FC = () => {
@@ -160,26 +161,48 @@ export const SidebarDrawer: React.FC = () => {
                     <ChevronRight className="w-4 h-4 text-slate-400" />
                   </button>
                   {isLoggedIn && currentUser?.role === 'parent' && (
-                    <button
-                      onClick={() => handleNavigate('guardian-dashboard')}
-                      className="w-full flex items-center justify-between p-2.5 rounded-lg text-slate-700 hover:bg-slate-100 font-medium text-xs transition-colors"
-                    >
-                      <span className="flex items-center gap-2.5">
-                        <User className="w-4 h-4 text-[#84CC16]" /> Parent Dashboard
-                      </span>
-                      <ChevronRight className="w-4 h-4 text-slate-400" />
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleNavigate('guardian-dashboard')}
+                        className="w-full flex items-center justify-between p-2.5 rounded-lg text-slate-700 hover:bg-slate-100 font-medium text-xs transition-colors"
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <User className="w-4 h-4 text-[#84CC16]" /> Parent Dashboard
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-slate-400" />
+                      </button>
+                      <button
+                        onClick={() => handleNavigate('guardian-saved-tutors')}
+                        className="w-full flex items-center justify-between p-2.5 rounded-lg text-slate-700 hover:bg-slate-100 font-medium text-xs transition-colors"
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <Bookmark className="w-4 h-4 text-indigo-500" /> Saved Tutors
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-slate-400" />
+                      </button>
+                    </>
                   )}
                   {isLoggedIn && currentUser?.role === 'tutor' && (
-                    <button
-                      onClick={() => handleNavigate('profile')}
-                      className="w-full flex items-center justify-between p-2.5 rounded-lg text-slate-700 hover:bg-slate-100 font-medium text-xs transition-colors"
-                    >
-                      <span className="flex items-center gap-2.5">
-                        <User className="w-4 h-4 text-[#84CC16]" /> My Profile & CV
-                      </span>
-                      <ChevronRight className="w-4 h-4 text-slate-400" />
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleNavigate('tutor-profile')}
+                        className="w-full flex items-center justify-between p-2.5 rounded-lg text-slate-700 hover:bg-slate-100 font-medium text-xs transition-colors"
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <User className="w-4 h-4 text-[#84CC16]" /> My Profile (/tutor/profile)
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-slate-400" />
+                      </button>
+                      <button
+                        onClick={() => handleNavigate('tutor-saved-jobs')}
+                        className="w-full flex items-center justify-between p-2.5 rounded-lg text-slate-700 hover:bg-slate-100 font-medium text-xs transition-colors"
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <Bookmark className="w-4 h-4 text-indigo-500" /> Saved Jobs (/tutor/saved-jobs)
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-slate-400" />
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

@@ -361,6 +361,50 @@ export const AdminTuitionDetailsView: React.FC = () => {
         {/* Left Column (Existing Content style) */}
         <div className="lg:col-span-2 space-y-6">
 
+          {/* Guardian Requested Demo Banner */}
+          {tuition?.guardianSelectedTutorId && !activeDemo && (
+            <div className="bg-gradient-to-r from-purple-50 via-fuchsia-50 to-pink-50 border-2 border-purple-300 rounded-2xl p-5 shadow-sm space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-200/80 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-xs shrink-0 font-black">
+                    ★
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-black text-slate-900 text-base">Guardian Requested Demo Class!</h4>
+                      <span className="px-2.5 py-0.5 rounded-full bg-purple-200 text-purple-950 font-extrabold text-[10px] uppercase tracking-wide animate-pulse">
+                        Action Required: Assign Demo
+                      </span>
+                    </div>
+                    <p className="text-xs text-purple-900 font-medium mt-0.5">
+                      Parent/Guardian reviewed applicants and selected <strong className="font-black text-purple-950">{tuition.guardianSelectedTutorName || 'Tutor'}</strong>.
+                      {tuition.guardianPreferredDate && ` Preferred timing: "${tuition.guardianPreferredDate}".`}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDemoTutor(tuition.guardianSelectedTutorId);
+                    setShowDemoSchedule(true);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-transform hover:scale-102 cursor-pointer shrink-0"
+                >
+                  <Calendar className="w-4 h-4" />
+                  <span>Assign Demo to {tuition.guardianSelectedTutorName?.split(' ')[0] || 'Tutor'}</span>
+                </button>
+              </div>
+
+              {tuition.guardianDemoNotes && (
+                <div className="p-3 bg-white/80 rounded-xl border border-purple-100 text-xs text-slate-700">
+                  <span className="font-bold text-purple-900">Guardian's Special Note: </span>
+                  <span className="italic">"{tuition.guardianDemoNotes}"</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Active Demo Assignment Banner */}
           {activeDemo && (
             <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-5 shadow-sm space-y-3">

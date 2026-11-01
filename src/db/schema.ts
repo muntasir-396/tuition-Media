@@ -78,6 +78,22 @@ export const tuitions = pgTable('tuitions', {
   longitude: text('longitude'),
   assignedTutorId: text('assigned_tutor_id'),
   confirmedStartDate: text('confirmed_start_date'),
+  cancelReason: text('cancel_reason'),
+  cancelledBy: text('cancelled_by'),
+  cancelledAt: timestamp('cancelled_at'),
+  shortlistedTutorIds: jsonb('shortlisted_tutor_ids'),
+});
+
+export const areas = pgTable('areas', {
+  id: text('id').primaryKey(),
+  division: text('division').notNull(),
+  district: text('district').notNull(),
+  thana: text('thana').notNull(),
+  nameEn: text('name_en').notNull(),
+  nameBn: text('name_bn'),
+  slug: text('slug').notNull().unique(),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
 export const demos = pgTable('demos', {
@@ -91,6 +107,9 @@ export const demos = pgTable('demos', {
   updatedAt: timestamp('updated_at').defaultNow(),
   status: text('status').default('Scheduled'),
   result: text('result'),
+  guardianDecision: text('guardian_decision'),
+  guardianRating: integer('guardian_rating'),
+  guardianFeedback: text('guardian_feedback'),
 });
 
 export const payments = pgTable('payments', {
@@ -148,14 +167,26 @@ export const tutorProfiles = pgTable('tutor_profiles', {
   userId: uuid('user_id').references(() => profiles.id, { onDelete: 'cascade' }),
   tutorCode: text('tutor_code').unique(),
   fullName: text('full_name'),
+  tagline: text('tagline'),
+  shortBio: text('short_bio'),
   dateOfBirth: text('date_of_birth'),
   gender: text('gender'),
+  bloodGroup: text('blood_group'),
+  religion: text('religion'),
+  maritalStatus: text('marital_status'),
+  nationality: text('nationality').default('Bangladeshi'),
+  nidNumber: text('nid_number'),
+  primaryPhone: text('primary_phone'),
+  primaryPhoneVerified: boolean('primary_phone_verified').default(false),
+  secondaryPhone: text('secondary_phone'),
+  whatsappNumber: text('whatsapp_number'),
   university: text('university'),
   department: text('department'),
   studentId: text('student_id'),
   academicYear: text('academic_year'),
   presentAddress: text('present_address'),
   permanentAddress: text('permanent_address'),
+  sameAsPresentAddress: boolean('same_as_present_address').default(false),
   district: text('district'),
   area: text('area'),
   tutoringExperience: integer('tutoring_experience'),
@@ -171,12 +202,12 @@ export const tutorProfiles = pgTable('tutor_profiles', {
   verificationStatus: text('verification_status').default('pending'),
   verificationDate: timestamp('verification_date'),
   nidStatus: text('nid_status'),
-  bloodGroup: text('blood_group'),
-  religion: text('religion'),
   guardianInfo: jsonb('guardian_info'),
   educationHistory: jsonb('education_history'),
   preferredAreas: jsonb('preferred_areas'),
   status: text('status').default('active'),
+  profileVisibility: text('profile_visibility').default('public'),
+  hideLastName: boolean('hide_last_name').default(false),
   nidDocumentUrl: text('nid_document_url'),
   cvUrl: text('cv_url'),
   profilePhotoUrl: text('profile_photo_url'),
@@ -458,4 +489,195 @@ export const reports = pgTable('reports', {
   resolution: text('resolution'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// =========================================================
+// TUTOR PROFILE NORMALIZED MODULE TABLES
+// =========================================================
+
+export const tutorEducation = pgTable('tutor_education', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tutorId: uuid('tutor_id').references(() => tutorProfiles.id, { onDelete: 'cascade' }).notNull(),
+  level: text('level').notNull(), // SSC, HSC, Diploma, Bachelor, Master, Other
+  degreeName: text('degree_name').notNull(),
+  groupMajor: text('group_major'),
+  institute: text('institute').notNull(),
+  boardUniversity: text('board_university'),
+  passingYear: text('passing_year'),
+  resultType: text('result_type'), // GPA, CGPA, Division
+  resultValue: text('result_value'),
+  currentlyStudying: boolean('currently_studying').default(false),
+  expectedGraduation: text('expected_graduation'),
+  studentId: text('student_id'),
+  department: text('department'),
+  academicYear: text('academic_year'),
+  certificateUrl: text('certificate_url'),
+  displayOrder: integer('display_order').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => [
+  index('tutor_edu_tutor_id_idx').on(table.tutorId)
+]);
+
+export const tutorExperience = pgTable('tutor_experience', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tutorId: uuid('tutor_id').references(() => tutorProfiles.id, { onDelete: 'cascade' }).notNull(),
+  subject: text('subject').notNull(),
+  courseClass: text('course_class').notNull(),
+  duration: text('duration'),
+  role: text('role'),
+  referenceName: text('reference_name'), // private
+  referencePhone: text('reference_phone'), // private
+  description: text('description'),
+  achievements: text('achievements'),
+  introVideoUrl: text('intro_video_url'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => [
+  index('tutor_exp_tutor_id_idx').on(table.tutorId)
+]);
+
+export const tutorCertifications = pgTable('tutor_certifications', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tutorId: uuid('tutor_id').references(() => tutorProfiles.id, { onDelete: 'cascade' }).notNull(),
+  title: text('title').notNull(),
+  issuer: text('issuer').notNull(),
+  year: text('year'),
+  certificateUrl: text('certificate_url'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => [
+  index('tutor_cert_tutor_id_idx').on(table.tutorId)
+]);
+
+export const tutorPreferences = pgTable('tutor_preferences', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tutorId: uuid('tutor_id').references(() => tutorProfiles.id, { onDelete: 'cascade' }).notNull().unique(),
+  mediums: jsonb('mediums'), // ['Bangla Medium', 'English Medium', ...]
+  classes: jsonb('classes'), // ['Class 9-10 (SSC)', ...]
+  subjects: jsonb('subjects'), // by class group
+  tuitionTypes: jsonb('tuition_types'), // ['Home Tutoring', 'Online Tutoring', 'Batch Tutoring']
+  studentGenderPref: text('student_gender_pref').default('Any'), // 'Male', 'Female', 'Any'
+  maxStudents: integer('max_students').default(1),
+  expectedSalaryMin: integer('expected_salary_min'),
+  expectedSalaryMax: integer('expected_salary_max'),
+  salaryNegotiable: boolean('salary_negotiable').default(true),
+  preferredDaysPerWeek: text('preferred_days_per_week'),
+  preferredDuration: text('preferred_duration'),
+  languageSkills: jsonb('language_skills'), // ['Bangla', 'English']
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const tutorAreas = pgTable('tutor_areas', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tutorId: uuid('tutor_id').references(() => tutorProfiles.id, { onDelete: 'cascade' }).notNull(),
+  areaId: text('area_id').references(() => areas.id, { onDelete: 'cascade' }).notNull(),
+  maxTravelDistanceKm: integer('max_travel_distance_km').default(5),
+  willingToRelocate: boolean('willing_to_relocate').default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => [
+  uniqueIndex('unique_tutor_area_idx').on(table.tutorId, table.areaId),
+  index('tutor_areas_tutor_id_idx').on(table.tutorId)
+]);
+
+export const tutorAvailability = pgTable('tutor_availability', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tutorId: uuid('tutor_id').references(() => tutorProfiles.id, { onDelete: 'cascade' }).notNull(),
+  dayOfWeek: text('day_of_week').notNull(), // Saturday, Sunday, Monday, Tuesday, Wednesday, Thursday, Friday
+  slot: text('slot').notNull(), // morning, afternoon, evening, night
+  isAvailable: boolean('is_available').default(true),
+  availableFrom: timestamp('available_from'),
+  isOpenForTuition: boolean('is_open_for_tuition').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => [
+  uniqueIndex('unique_tutor_slot_idx').on(table.tutorId, table.dayOfWeek, table.slot),
+  index('tutor_avail_tutor_id_idx').on(table.tutorId)
+]);
+
+export const tutorDocuments = pgTable('tutor_documents', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tutorId: uuid('tutor_id').references(() => tutorProfiles.id, { onDelete: 'cascade' }).notNull(),
+  documentType: text('document_type').notNull(), // NID_FRONT, NID_BACK, STUDENT_ID, TRANSCRIPT, PHOTO, CERTIFICATE
+  storageKey: text('storage_key'),
+  fileUrl: text('file_url'),
+  fileSize: integer('file_size'),
+  mimeType: text('mime_type'),
+  status: text('status').default('pending'), // not_uploaded, pending, approved, rejected
+  rejectionReason: text('rejection_reason'),
+  reviewedBy: uuid('reviewed_by'),
+  reviewedAt: timestamp('reviewed_at'),
+  uploadedAt: timestamp('uploaded_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => [
+  index('tutor_doc_tutor_id_idx').on(table.tutorId),
+  index('tutor_doc_type_idx').on(table.documentType)
+]);
+
+export const tutorPaymentInfo = pgTable('tutor_payment_info', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tutorId: uuid('tutor_id').references(() => tutorProfiles.id, { onDelete: 'cascade' }).notNull().unique(),
+  method: text('method').notNull().default('bKash'), // bKash, Nagad, Rocket, Bank
+  mobileWalletNumber: text('mobile_wallet_number'), // encrypted
+  bankName: text('bank_name'),
+  bankAccountHolder: text('bank_account_holder'),
+  bankAccountNumber: text('bank_account_number'), // encrypted
+  bankBranch: text('bank_branch'),
+  routingNumber: text('routing_number'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const tutorEmergencyContacts = pgTable('tutor_emergency_contacts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tutorId: uuid('tutor_id').references(() => tutorProfiles.id, { onDelete: 'cascade' }).notNull().unique(),
+  fatherName: text('father_name'),
+  fatherPhone: text('father_phone'),
+  motherName: text('mother_name'),
+  motherPhone: text('mother_phone'),
+  emergencyContactName: text('emergency_contact_name'),
+  emergencyContactRelation: text('emergency_contact_relation'),
+  emergencyContactPhone: text('emergency_contact_phone'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// =========================================================
+// UNIFIED BOOKMARKS TABLE
+// =========================================================
+
+export const bookmarks = pgTable('bookmarks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').references(() => profiles.id, { onDelete: 'cascade' }).notNull(),
+  targetType: text('target_type').notNull(), // 'tuition' | 'tutor'
+  targetId: text('target_id').notNull(),
+  personalNote: text('personal_note'),
+  remindMe: boolean('remind_me').default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => [
+  uniqueIndex('unique_user_target_idx').on(table.userId, table.targetType, table.targetId),
+  index('bookmarks_user_created_idx').on(table.userId, table.createdAt)
+]);
+
+export const profileAuditLogs = pgTable('profile_audit_logs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').references(() => profiles.id, { onDelete: 'cascade' }).notNull(),
+  changedBy: uuid('changed_by'),
+  section: text('section').notNull(),
+  field: text('field'),
+  oldValue: text('old_value'),
+  newValue: text('new_value'),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => [
+  index('profile_audit_user_idx').on(table.userId),
+  index('profile_audit_created_idx').on(table.createdAt)
+]);
+
+export const subjects = pgTable('subjects', {
+  id: serial('id').primaryKey(),
+  nameEn: text('name_en').notNull(),
+  nameBn: text('name_bn'),
+  category: text('category'), // General, Science, Commerce, Arts, Language
+  isApproved: boolean('is_approved').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
 });

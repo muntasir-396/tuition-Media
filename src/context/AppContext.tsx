@@ -39,7 +39,8 @@ interface AppContextType {
   
   // Interactivity
   bookmarkedJobIds: string[];
-  toggleBookmark: (jobId: string) => void;
+  bookmarkedTutorIds: string[];
+  toggleBookmark: (targetTypeOrJobId: string, maybeTargetId?: string) => Promise<void>;
   appliedJobIds: string[];
   applyToJob: (jobId: string) => void;
   
@@ -179,8 +180,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [tutorSearchQuery, setTutorSearchQuery] = useState<string>('');
   const [selectedMediumFilter, setSelectedMediumFilter] = useState<string>('All');
   
-  const [bookmarkedJobIds, setBookmarkedJobIds] = useState<string[]>(['80703']);
+  const [bookmarkedJobIds, setBookmarkedJobIds] = useState<string[]>([]);
+  const [bookmarkedTutorIds, setBookmarkedTutorIds] = useState<string[]>([]);
   const [appliedJobIds, setAppliedJobIds] = useState<string[]>([]);
+
+  // Synchronize bookmarks with database
+  useEffect(() => {
+    const fetchBookmarkIds = async () => {
+      try {
+        const res = await fetch('/api/bookmarks/ids', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          setBookmarkedJobIds(data.tuitionIds || []);
+          setBookmarkedTutorIds(data.tutorIds || []);
+        }
+      } catch (err) {
+        // quiet catch
+      }
+    };
+
+    fetchBookmarkIds();
+
+    // Migrate any legacy localStorage bookmarks
+    try {
+      const rawLegacy = localStorage.getItem('bookmarkedJobIds');
+      if (rawLegacy && isLoggedIn) {
+        const legacyIds = JSON.parse(rawLegacy);
+        if (Array.isArray(legacyIds) && legacyIds.length > 0) {
+          Promise.all(
+            legacyIds.map((id: string) =>
+              fetch('/api/bookmarks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ targetType: 'tuition', targetId: id }),
+              }).catch(() => {})
+            )
+          ).then(() => {
+            localStorage.removeItem('bookmarkedJobIds');
+            fetchBookmarkIds();
+          });
+        }
+      }
+    } catch (e) {}
+  }, [isLoggedIn]);
   
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [isTutorialModalOpen, setIsTutorialModalOpen] = useState<boolean>(false);
@@ -203,10 +246,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const pathname = window.location.pathname.replace(/\/$/, '');
       let newTab: PageTab = tabParam || 'home';
       
-      if (pathname === '/request-tutor' || pathname === '/guardian' || pathname.startsWith('/guardian/')) {
-        newTab = 'request-tutor';
+      if (pathname === '/request-tutor' || pathname === '/guardian' || pathname.startsWith('/guardian/saved-tutors')) {
+        newTab = pathname.includes('saved-tutors') ? 'guardian-saved-tutors' : 'request-tutor';
       } else if (pathname === '/admin' || pathname === '/admin-login' || pathname.startsWith('/admin/')) {
         newTab = 'admin-login';
+      } else if (pathname === '/tutor/profile' || pathname.startsWith('/tutor/profile/')) {
+        newTab = 'tutor-profile';
+      } else if (pathname === '/tutor/saved-jobs') {
+        newTab = 'tutor-saved-jobs';
       } else if (pathname === '/tutor' || pathname === '/login' || pathname === '/tutor-login' || pathname.startsWith('/tutor/')) {
         newTab = 'login';
       }
@@ -248,6 +295,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const url = new URL(window.location.href);
     if (tab === 'request-tutor') {
       url.pathname = '/guardian';
+      url.search = '';
+    } else if (tab === 'guardian-saved-tutors') {
+      url.pathname = '/guardian/saved-tutors';
+      url.search = '';
+    } else if (tab === 'tutor-profile') {
+      url.pathname = '/tutor/profile';
+      url.search = '';
+    } else if (tab === 'tutor-saved-jobs') {
+      url.pathname = '/tutor/saved-jobs';
       url.search = '';
     } else if (tab === 'login') {
       url.pathname = '/tutor';
@@ -317,10 +373,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return (currentUser as any).permissions?.includes(perm);
   };
 
-  const toggleBookmark = (jobId: string) => {
-    setBookmarkedJobIds((prev) =>
-      prev.includes(jobId) ? prev.filter((id) => id !== jobId) : [...prev, jobId]
-    );
+  const toggleBookmark = async (targetTypeOrJobId: string, maybeTargetId?: string) => {
+    let targetType: 'tuition' | 'tutor' = 'tuition';
+    let targetId = targetTypeOrJobId;
+    if (maybeTargetId) {
+      targetType = targetTypeOrJobId as 'tuition' | 'tutor';
+      targetId = maybeTargetId;
+    }
+
+    const isCurrentlyBookmarked = targetType === 'tuition'
+      ? bookmarkedJobIds.includes(targetId)
+      : bookmarkedTutorIds.includes(targetId);
+
+    // Optimistic UI update
+    if (targetType === 'tuition') {
+      setBookmarkedJobIds((prev) =>
+        isCurrentlyBookmarked ? prev.filter((id) => id !== targetId) : [...prev, targetId]
+      );
+    } else {
+      setBookmarkedTutorIds((prev) =>
+        isCurrentlyBookmarked ? prev.filter((id) => id !== targetId) : [...prev, targetId]
+      );
+    }
+
+    try {
+      if (isCurrentlyBookmarked) {
+        await fetch(`/api/bookmarks/${targetType}/${targetId}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+      } else {
+        await fetch('/api/bookmarks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ targetType, targetId }),
+        });
+      }
+    } catch (e) {
+      // Rollback on failure
+      if (targetType === 'tuition') {
+        setBookmarkedJobIds((prev) =>
+          isCurrentlyBookmarked ? [...prev, targetId] : prev.filter((id) => id !== targetId)
+        );
+      } else {
+        setBookmarkedTutorIds((prev) =>
+          isCurrentlyBookmarked ? [...prev, targetId] : prev.filter((id) => id !== targetId)
+        );
+      }
+    }
   };
 
   const applyToJob = (jobId: string) => {
@@ -474,6 +575,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         selectedMediumFilter,
         setSelectedMediumFilter,
         bookmarkedJobIds,
+        bookmarkedTutorIds,
         toggleBookmark,
         appliedJobIds,
         applyToJob,

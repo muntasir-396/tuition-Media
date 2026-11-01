@@ -66,3 +66,30 @@ export const SERVICE_CATEGORIES: ServiceCategory[] = [
 
 export const MOCK_JOBS: TuitionJob[] = [];
 export const MOCK_TUTORS: TutorProfile[] = [];
+
+export const BD_AREAS = [
+  // Dhaka Division - Dhaka District
+  { id: 'dhk-mirpur', division: 'Dhaka', district: 'Dhaka', thana: 'Mirpur', nameEn: 'Mirpur', nameBn: 'মিরপুর', slug: 'mirpur' },
+  { id: 'dhk-dhanmondi', division: 'Dhaka', district: 'Dhaka', thana: 'Dhanmondi', nameEn: 'Dhanmondi', nameBn: 'ধানমন্ডি', slug: 'dhanmondi' },
+  { id: 'dhk-uttara', division: 'Dhaka', district: 'Dhaka', thana: 'Uttara', nameEn: 'Uttara', nameBn: 'উত্তরা', slug: 'uttara' },
+  { id: 'dhk-gulshan', division: 'Dhaka', district: 'Dhaka', thana: 'Gulshan', nameEn: 'Gulshan', nameBn: 'গুলশান', slug: 'gulshan' },
+  { id: 'dhk-banani', division: 'Dhaka', district: 'Dhaka', thana: 'Banani', nameEn: 'Banani', nameBn: 'বনানী', slug: 'banani' },
+  { id: 'dhk-mohammadpur', division: 'Dhaka', district: 'Dhaka', thana: 'Mohammadpur', nameEn: 'Mohammadpur', nameBn: 'মোহাম্মদপুর', slug: 'mohammadpur' },
+  { id: 'dhk-badda', division: 'Dhaka', district: 'Dhaka', thana: 'Badda', nameEn: 'Badda', nameBn: 'বাড্ডা', slug: 'badda' },
+  { id: 'dhk-bashundhara', division: 'Dhaka', district: 'Dhaka', thana: 'Vatara', nameEn: 'Bashundhara R/A', nameBn: 'বসুন্ধরা আ/এ', slug: 'bashundhara-ra' },
+  { id: 'dhk-khilgaon', division: 'Dhaka', district: 'Dhaka', thana: 'Khilgaon', nameEn: 'Khilgaon', nameBn: 'খিলগাঁও', slug: 'khilgaon' },
+  { id: 'dhk-malibagh', division: 'Dhaka', district: 'Dhaka', thana: 'Rampura', nameEn: 'Malibagh', nameBn: 'মালিবাগ', slug: 'malibagh' },
+  { id: 'dhk-farmgate', division: 'Dhaka', district: 'Dhaka', thana: 'Tejgaon', nameEn: 'Farmgate', nameBn: 'ফার্মগেট', slug: 'farmgate' },
+  { id: 'dhk-old-dhaka', division: 'Dhaka', district: 'Dhaka', thana: 'Lalbagh', nameEn: 'Old Dhaka / Lalbagh', nameBn: 'পুরান ঢাকা / লালবাগ', slug: 'old-dhaka' },
+  { id: 'dhk-shantinagar', division: 'Dhaka', district: 'Dhaka', thana: 'Paltan', nameEn: 'Shantinagar / Kakrail', nameBn: 'শান্তিনগর / কাকরাইল', slug: 'shantinagar' },
+  // Chittagong
+  { id: 'ctg-gec', division: 'Chittagong', district: 'Chittagong', thana: 'Khulshi', nameEn: 'GEC Circle', nameBn: 'জিইসি মোড়', slug: 'gec-circle' },
+  { id: 'ctg-agrabad', division: 'Chittagong', district: 'Chittagong', thana: 'Double Mooring', nameEn: 'Agrabad', nameBn: 'আগ্রাবাদ', slug: 'agrabad' },
+  { id: 'ctg-nasirabad', division: 'Chittagong', district: 'Chittagong', thana: 'Panchlaish', nameEn: 'Nasirabad', nameBn: 'নাসিরাবাদ', slug: 'nasirabad' },
+  { id: 'ctg-halishahar', division: 'Chittagong', district: 'Chittagong', thana: 'Halishahar', nameEn: 'Halishahar', nameBn: 'হালিশহর', slug: 'halishahar' },
+  // Sylhet
+  { id: 'syl-zindabazar', division: 'Sylhet', district: 'Sylhet', thana: 'Kotwali', nameEn: 'Zindabazar', nameBn: 'জিন্দাবাজার', slug: 'zindabazar' },
+  { id: 'syl-amberkhana', division: 'Sylhet', district: 'Sylhet', thana: 'Airport', nameEn: 'Amberkhana', nameBn: 'আম্বরখানা', slug: 'amberkhana' },
+  // Rajshahi
+  { id: 'raj-motihar', division: 'Rajshahi', district: 'Rajshahi', thana: 'Motihar', nameEn: 'Motihar / RU Area', nameBn: 'মতিহার', slug: 'motihar' },
+];

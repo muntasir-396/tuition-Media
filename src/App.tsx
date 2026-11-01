@@ -8,6 +8,9 @@ import { JobsView } from './components/JobsView';
 import { JobDetailsView } from './components/JobDetailsView';
 import { TutorsView } from './components/TutorsView';
 import { TutorProfileView } from './components/TutorProfileView';
+import { TutorProfileView as FullTutorProfileView } from './components/tutor/TutorProfileView';
+import { TutorSavedJobsView } from './components/tutor/TutorSavedJobsView';
+import { GuardianSavedTutorsView } from './components/guardian/GuardianSavedTutorsView';
 import { AuthView } from './components/AuthView';
 import { Modals } from './components/Modals';
 import { AdminDashboardView } from './components/AdminDashboardView';
@@ -41,8 +44,8 @@ const MainContent: React.FC = () => {
   }
 
   const isAdminTab = activeTab.startsWith('admin-') && activeTab !== 'admin-login';
-  const isTutorTab = activeTab === 'profile';
-  const isGuardianTab = activeTab === 'guardian-dashboard';
+  const isTutorTab = activeTab === 'profile' || activeTab === 'tutor-profile' || activeTab === 'tutor-saved-jobs';
+  const isGuardianTab = activeTab === 'guardian-dashboard' || activeTab === 'guardian-saved-tutors';
 
   if (isAdminTab) {
     if (!isLoggedIn || (userRole !== 'admin' && userRole !== 'super-admin')) {
@@ -140,7 +143,10 @@ const MainContent: React.FC = () => {
       {activeTab === 'jobs' && <JobsView />}
       {activeTab === 'job-details' && <JobDetailsView />}
       {activeTab === 'tutors' && <TutorsView />}
-      {activeTab === 'profile' && <TutorProfileView />}
+      {(activeTab === 'tutor-profile' || (activeTab === 'profile' && !selectedTutor && currentUser?.role === 'tutor')) && <FullTutorProfileView />}
+      {activeTab === 'profile' && (selectedTutor || currentUser?.role !== 'tutor') && <TutorProfileView />}
+      {activeTab === 'tutor-saved-jobs' && <TutorSavedJobsView />}
+      {activeTab === 'guardian-saved-tutors' && <GuardianSavedTutorsView />}
       {activeTab === 'guardian-dashboard' && <GuardianDashboardView />}
       {activeTab === 'login' && <AuthView />}
       {activeTab === 'request-tutor' && <RequestTutorView />}

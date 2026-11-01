@@ -13,6 +13,7 @@ import {
   ChevronRight,
   ShieldCheck,
   UserCheck,
+  Bookmark,
 } from 'lucide-react';
 
 export const TutorsView: React.FC = () => {
@@ -22,6 +23,8 @@ export const TutorsView: React.FC = () => {
     selectedCity,
     setSelectedCity,
     navigateToTutorProfile,
+    bookmarkedTutorIds,
+    toggleBookmark,
   } = useApp();
 
   const [genderFilter, setGenderFilter] = useState<'All' | 'Male' | 'Female'>('All');
@@ -379,6 +382,17 @@ export const TutorsView: React.FC = () => {
 
                   <div className="flex items-center gap-2">
                     <button
+                      onClick={() => toggleBookmark('tutor', tutor.id)}
+                      title={bookmarkedTutorIds.includes(tutor.id) ? "Remove bookmark" : "Save tutor"}
+                      className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                        bookmarkedTutorIds.includes(tutor.id)
+                          ? 'bg-rose-50 border-rose-200 text-rose-600'
+                          : 'bg-white border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Bookmark className={`w-4 h-4 ${bookmarkedTutorIds.includes(tutor.id) ? 'fill-rose-500 text-rose-500' : ''}`} />
+                    </button>
+                    <button
                       onClick={() => navigateToTutorProfile(tutor.id)}
                       className="px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
                     >
@@ -463,6 +477,17 @@ export const TutorsView: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => toggleBookmark('tutor', tutor.id)}
+                      title={bookmarkedTutorIds.includes(tutor.id) ? "Remove bookmark" : "Save tutor"}
+                      className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                        bookmarkedTutorIds.includes(tutor.id)
+                          ? 'bg-rose-50 border-rose-200 text-rose-600'
+                          : 'bg-white border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Bookmark className={`w-4 h-4 ${bookmarkedTutorIds.includes(tutor.id) ? 'fill-rose-500 text-rose-500' : ''}`} />
+                    </button>
                     <button
                       onClick={() => navigateToTutorProfile(tutor.id)}
                       className="px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs transition-colors cursor-pointer"

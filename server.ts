@@ -10,8 +10,56 @@ import {
   tuitionRequests, guardianProfiles, tutorProfiles, tutorApplications,
   demoClasses, paymentRecords, profiles,
   tuitions as tuitionsTable, guardians as guardiansTable, tutors as tutorsTable,
-  demos as demosTable, payments as paymentsTable, notifications as notificationsTable
+  demos as demosTable, payments as paymentsTable, notifications as notificationsTable,
+  areas as areasTable,
+  tutorEducation, tutorExperience, tutorCertifications, tutorPreferences,
+  tutorAreas, tutorAvailability, tutorDocuments, tutorPaymentInfo,
+  tutorEmergencyContacts, bookmarks as bookmarksTable, profileAuditLogs,
+  subjects as subjectsTable
 } from "./src/db/schema.js";
+import { BD_AREAS } from "./src/data/mockData.js";
+import { computeProfileCompletion, serializeTutorForPublic } from "./src/lib/tutorProfileUtils.js";
+import {
+  sanitizeBioText,
+  personalSectionSchema,
+  contactSectionSchema,
+  educationEntrySchema,
+  preferencesSectionSchema,
+  areasSectionSchema,
+  availabilitySectionSchema,
+  experienceEntrySchema,
+  paymentInfoSectionSchema,
+  emergencyContactSectionSchema,
+  privacySectionSchema,
+  bookmarkInputSchema
+} from "./src/lib/validation/tutorProfile.js";
+
+// Strict Tuition Lifecycle State Machine (Prevents jumping states)
+export const ALLOWED_STATUS_TRANSITIONS: Record<string, string[]> = {
+  PENDING: ['OPEN', 'PENDING_REVIEW', 'CANCELLED'],
+  PENDING_REVIEW: ['OPEN', 'CANCELLED'],
+  OPEN: ['SHORTLISTED', 'TEACHERS_APPLIED', 'GUARDIAN_SELECTED', 'CANCELLED'],
+  TEACHERS_APPLIED: ['SHORTLISTED', 'GUARDIAN_SELECTED', 'OPEN', 'CANCELLED'],
+  GUARDIAN_SELECTED: ['DEMO_SCHEDULED', 'SHORTLISTED', 'OPEN', 'CANCELLED'],
+  SHORTLISTED: ['DEMO_SCHEDULED', 'OPEN', 'CANCELLED'],
+  DEMO_SCHEDULED: ['DEMO_DONE', 'WINNER_SELECTED', 'CONFIRMED', 'SHORTLISTED', 'CANCELLED'],
+  DEMO_DONE: ['CONFIRMED', 'WINNER_SELECTED', 'SHORTLISTED', 'CANCELLED'],
+  WINNER_SELECTED: ['CONFIRMED', 'ASSIGNED', 'CANCELLED'],
+  CONFIRMED: ['ASSIGNED', 'PAID', 'CANCELLED'],
+  ASSIGNED: ['PAID', 'CANCELLED'],
+  PAID: ['COMPLETED', 'CANCELLED'],
+  CANCELLED: [],
+  ARCHIVED: []
+};
+
+export function canTransitionStatus(currentStatus: string, targetStatus: string): boolean {
+  const curr = (currentStatus || 'OPEN').toUpperCase();
+  const target = (targetStatus || '').toUpperCase();
+  if (curr === target) return true;
+  const allowed = ALLOWED_STATUS_TRANSITIONS[curr];
+  if (!allowed) return true; // graceful fallback
+  return allowed.includes(target);
+}
 
 const mapTuitionToOld = (t: any): any => {
   let oldStatus = (t.status || '').toUpperCase();
@@ -91,7 +139,23 @@ const mapTuitionToOld = (t: any): any => {
     demoTutor: t.demoTutor || '',
     demoTutorName: t.demoTutorName || '',
     demoTutorPhone: t.demoTutorPhone || '',
+    cancelReason: t.cancelReason || '',
+    cancelledBy: t.cancelledBy || '',
+    cancelledAt: t.cancelledAt || null,
+    shortlistedTutorIds: t.shortlistedTutorIds || [],
   };
+};
+
+const maskContactDetailsForPublic = (item: any, isAuthorized: boolean = false) => {
+  if (isAuthorized) return item;
+  const clone = { ...item };
+  if (clone.guardianPhone && typeof clone.guardianPhone === 'string' && clone.guardianPhone.length >= 6) {
+    clone.guardianPhone = clone.guardianPhone.substring(0, 5) + '-XXXXXX (Hidden)';
+  }
+  if (clone.guardianAltPhone) {
+    clone.guardianAltPhone = 'Hidden';
+  }
+  return clone;
 };
 
 const mapTutorToOld = (t: any): any => {
@@ -173,6 +237,117 @@ let mockNotifications: any[] = [];
 function initMockData() {
   const now = new Date().toISOString();
   mockTuitions = [
+    {
+      id: 'T-1024',
+      jobCode: 'T-1024',
+      title: 'Mathematics (Class 9)',
+      curriculum: 'Bangla Medium',
+      course: 'Class 9',
+      courseClass: 'Class 9',
+      category: 'General',
+      subjects: ['Mathematics'],
+      studentCount: '1',
+      studentsCount: '1',
+      studentGender: 'Male',
+      preferredTutorGender: 'Any',
+      tutorGender: 'Any',
+      daysPerWeek: '4 days',
+      preferredTime: '5:00 PM',
+      time: '5:00 PM',
+      duration: '1.5 Hours',
+      method: 'Home Tutoring',
+      salary: '6000',
+      salaryMax: 6000,
+      salaryMin: 6000,
+      fullAddress: 'Dhanmondi, Dhaka',
+      location: 'Dhanmondi, Dhaka',
+      area: 'Dhanmondi',
+      district: 'Dhaka',
+      city: 'Dhaka',
+      guardianName: 'Parent',
+      guardianPhone: '01715998756',
+      notes: 'Need an experienced mathematics tutor for Class 9 SSC preparation.',
+      parentSpecialInstructions: 'Need an experienced mathematics tutor for Class 9 SSC preparation.',
+      status: 'TEACHERS_APPLIED',
+      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      views: 74,
+      applications: 5
+    },
+    {
+      id: 'T-998',
+      jobCode: 'T-998',
+      title: 'English (Class 7)',
+      curriculum: 'English Version',
+      course: 'Class 7',
+      courseClass: 'Class 7',
+      category: 'General',
+      subjects: ['English'],
+      studentCount: '1',
+      studentsCount: '1',
+      studentGender: 'Female',
+      preferredTutorGender: 'Male',
+      tutorGender: 'Male',
+      daysPerWeek: '3 days',
+      preferredTime: '6:00 PM',
+      time: '6:00 PM',
+      duration: '1 Hour',
+      method: 'Home Tutoring',
+      salary: '5000',
+      salaryMax: 5000,
+      salaryMin: 5000,
+      fullAddress: 'Mirpur DOHS, Dhaka',
+      location: 'Mirpur, Dhaka',
+      area: 'Mirpur',
+      district: 'Dhaka',
+      city: 'Dhaka',
+      guardianName: 'Parent',
+      guardianPhone: '01715998756',
+      tutorName: 'Tanvir Hossain',
+      assignedTutorId: 'TT-1004',
+      status: 'CONFIRMED',
+      createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      updatedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      views: 120,
+      applications: 12
+    },
+    {
+      id: 'T-1045',
+      jobCode: 'T-1045',
+      title: 'Physics (Class 10)',
+      curriculum: 'Bangla Medium',
+      course: 'Class 10',
+      courseClass: 'Class 10',
+      category: 'General',
+      subjects: ['Physics'],
+      studentCount: '1',
+      studentsCount: '1',
+      studentGender: 'Male',
+      preferredTutorGender: 'Male',
+      tutorGender: 'Male',
+      daysPerWeek: '3 days',
+      preferredTime: 'Flexible',
+      time: 'Flexible',
+      duration: '1 Hour',
+      method: 'Home Tutoring',
+      salary: '8000',
+      salaryMax: 8000,
+      salaryMin: 8000,
+      fullAddress: 'Uttara Sector 7, Dhaka',
+      location: 'Uttara, Dhaka',
+      area: 'Uttara',
+      district: 'Dhaka',
+      city: 'Dhaka',
+      guardianName: 'Parent',
+      guardianPhone: '01715998756',
+      notes: 'Focus on Physics numericals and Board questions.',
+      parentSpecialInstructions: 'Focus on Physics numericals and Board questions.',
+      status: 'PENDING_REVIEW',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      views: 5,
+      applications: 0
+    },
     { 
       id: 'TR-539989', 
       jobCode: 'TR-539989', 
@@ -210,14 +385,21 @@ function initMockData() {
       views: 1, 
       applications: 0 
     },
-    { id: 'JOB-80703', title: 'Class 6 Math Tuition in Mirpur', curriculum: 'Bangla Medium', course: 'Class 6', courseClass: 'Class 6', subjects: ['Math'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Any', daysPerWeek: '5 days', preferredTime: '5:00 PM', method: 'Home Tutoring', salaryMax: 4000, salary: '4000', fullAddress: 'Mirpur-1, Dhaka', area: 'Mirpur', district: 'Dhaka', city: 'Dhaka', guardianName: 'Md. Rahman', guardianPhone: '01712345678', status: 'OPEN', createdAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(), views: 45, applications: 3, jobCode: 'JOB-80703' },
-    { id: 'JOB-80704', title: 'Class 10 Science Tuition in Banani', curriculum: 'English Medium', course: 'Class 10', courseClass: 'Class 10', subjects: ['Physics', 'Chemistry'], studentCount: '2', studentGender: 'Female', preferredTutorGender: 'Female', daysPerWeek: '3 days', preferredTime: '6:30 PM', method: 'Online Tutoring', salaryMax: 6000, salary: '6000', fullAddress: 'Banani, Dhaka', area: 'Banani', district: 'Dhaka', city: 'Dhaka', guardianName: 'Mrs. Ahmed', guardianPhone: '01798765432', status: 'OPEN', createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), views: 32, applications: 1, jobCode: 'JOB-80704' },
-    { id: 'JOB-80705', title: 'O Level Physics Tuition in Gulshan', curriculum: 'A/O Levels', course: 'O Level', courseClass: 'O Level', subjects: ['Physics'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Male', daysPerWeek: '4 days', preferredTime: '4:00 PM', method: 'Home Tutoring', salaryMax: 8000, salary: '8000', fullAddress: 'Gulshan-2, Dhaka', area: 'Gulshan', district: 'Dhaka', city: 'Dhaka', guardianName: 'Mr. Karim', guardianPhone: '01711111111', status: 'PENDING_REVIEW', createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), views: 18, applications: 0, jobCode: 'JOB-80705' },
-    { id: 'JOB-80706', title: 'Class 9 English Tuition in Chittagong', curriculum: 'English Version', course: 'Class 9', courseClass: 'Class 9', subjects: ['English'], studentCount: '1', studentGender: 'Mix', preferredTutorGender: 'Any', daysPerWeek: '3 days', preferredTime: '5:30 PM', method: 'Batch Tutoring', salaryMax: 3500, salary: '3500', fullAddress: 'Agrabad, Chittagong', area: 'Agrabad', district: 'Chittagong', city: 'Chittagong', guardianName: 'Mr. Hossain', guardianPhone: '01822222222', status: 'OPEN', createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), views: 27, applications: 5, jobCode: 'JOB-80706' },
-    { id: 'JOB-80707', title: 'SSC Math Tuition in Sylhet', curriculum: 'Bangla Medium', course: 'Class 10', courseClass: 'Class 10', subjects: ['Math', 'Physics'], studentCount: '3', studentGender: 'Male', preferredTutorGender: 'Male', daysPerWeek: '6 days', preferredTime: '6:00 PM', method: 'Home Tutoring', salaryMax: 5000, salary: '5000', fullAddress: 'Sylhet City', area: 'Sylhet', district: 'Sylhet', city: 'Sylhet', guardianName: 'Mr. Ali', guardianPhone: '01933333333', status: 'TEACHERS_APPLIED', createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), views: 56, applications: 8, jobCode: 'JOB-80707' },
-    { id: 'JOB-80708', title: 'Class 3 Nursery English Tuition in Gazipur', curriculum: 'English Medium', course: 'Nursery', courseClass: 'Nursery', subjects: ['English'], studentCount: '1', studentGender: 'Female', preferredTutorGender: 'Female', daysPerWeek: '5 days', preferredTime: '4:30 PM', method: 'Home Tutoring', salaryMax: 3000, salary: '3000', fullAddress: 'Gazipur', area: 'Gazipur', district: 'Gazipur', city: 'Gazipur', guardianName: 'Mrs. Khatun', guardianPhone: '01644444444', status: 'OPEN', createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), views: 12, applications: 2, jobCode: 'JOB-80708' },
-    { id: 'JOB-80709', title: 'HSC Biology Tuition in Khulna', curriculum: 'Bangla Medium', course: 'Class 12', courseClass: 'Class 12', subjects: ['Biology', 'Chemistry'], studentCount: '2', studentGender: 'Mix', preferredTutorGender: 'Any', daysPerWeek: '4 days', preferredTime: '7:00 PM', method: 'Online Tutoring', salaryMax: 5500, salary: '5500', fullAddress: 'Khulna', area: 'Khulna', district: 'Khulna', city: 'Khulna', guardianName: 'Mr. Das', guardianPhone: '01755555555', status: 'CONFIRMED', createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(), views: 89, applications: 12, jobCode: 'JOB-80709' },
-    { id: 'JOB-80710', title: 'Class 11 Physics Tuition in Rajshahi', curriculum: 'Bangla Medium', course: 'Class 11', courseClass: 'Class 11', subjects: ['Physics', 'Higher Math'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Male', daysPerWeek: '3 days', preferredTime: '5:00 PM', method: 'Home Tutoring', salaryMax: 4500, salary: '4500', fullAddress: 'Rajshahi', area: 'Rajshahi', district: 'Rajshahi', city: 'Rajshahi', guardianName: 'Mr. Islam', guardianPhone: '01866666666', status: 'OPEN', createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), views: 21, applications: 0, jobCode: 'JOB-80710' },
+    { id: '88049', jobCode: '88049', title: 'HSC 2nd Year', curriculum: 'Bangla Medium', course: 'HSC 2nd Year', courseClass: 'HSC 2nd Year', subjects: ['Biology'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Male', tutorGender: 'Male', daysPerWeek: '3 days', preferredTime: '4:00 PM', method: 'Home Tutoring', salaryMax: 6500, salary: '6500', fullAddress: 'Mohammadpur, Dhaka', area: 'Mohammadpur', district: 'Dhaka', city: 'Dhaka', guardianName: 'Mrs. Begum', guardianPhone: '01712001122', status: 'OPEN', createdAt: new Date(Date.now() - 17 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 17 * 60 * 1000).toISOString(), views: 24, applications: 2 },
+    { id: '88048', jobCode: '88048', title: 'HSC 2nd Year', curriculum: 'Bangla Medium', course: 'HSC 2nd Year', courseClass: 'HSC 2nd Year', subjects: ['Maths'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Male', tutorGender: 'Male', daysPerWeek: '3 days', preferredTime: '4:00 PM', method: 'Home Tutoring', salaryMax: 6500, salary: '6500', fullAddress: 'Mohammadpur, Dhaka', area: 'Mohammadpur', district: 'Dhaka', city: 'Dhaka', guardianName: 'Mr. Chowdhury', guardianPhone: '01712003344', status: 'OPEN', createdAt: new Date(Date.now() - 19 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 19 * 60 * 1000).toISOString(), views: 31, applications: 4 },
+    { id: '88047', jobCode: '88047', title: 'Class 6', curriculum: 'Bangla Medium', course: 'Class 6', courseClass: 'Class 6', subjects: ['Maths', 'English'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Any', tutorGender: 'Male', daysPerWeek: '4 days', preferredTime: '5:00 PM', method: 'Home Tutoring', salaryMax: 4500, salary: '4500', fullAddress: 'Mirpur 1, Dhaka', area: 'Mirpur', district: 'Dhaka', city: 'Dhaka', guardianName: 'Md. Faruk', guardianPhone: '01811223300', status: 'OPEN', createdAt: new Date(Date.now() - 26 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 26 * 60 * 1000).toISOString(), views: 19, applications: 1 },
+    { id: '88046', jobCode: '88046', title: 'HSC 1st Year', curriculum: 'Bangla Medium', course: 'HSC 1st Year', courseClass: 'HSC 1st Year', subjects: ['Physics', 'Chemistry'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Male', tutorGender: 'Male', daysPerWeek: '4 days', preferredTime: '4:00 PM', method: 'Home Tutoring', salaryMax: 7000, salary: '7000', fullAddress: 'Malibagh, Dhaka', area: 'Malibagh', district: 'Dhaka', city: 'Dhaka', guardianName: 'Dr. Hasan', guardianPhone: '01912345670', status: 'OPEN', createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(), views: 42, applications: 3 },
+    { id: '88045', jobCode: '88045', title: 'Class 9 Higher Math & Physics', curriculum: 'Bangla Medium', course: 'Class 9', courseClass: 'Class 9', subjects: ['Higher Math', 'Physics'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Male', tutorGender: 'Male', daysPerWeek: '3 days', preferredTime: '5:00 PM', method: 'Home Tutoring', salaryMax: 6000, salary: '6000', fullAddress: 'Middle Badda, Dhaka', area: 'Badda', district: 'Dhaka', city: 'Dhaka', guardianName: 'Mr. Anisur Rahman', guardianPhone: '01711223399', status: 'OPEN', createdAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(), views: 18, applications: 2 },
+    { id: '88044', jobCode: '88044', title: 'Class 8 All Subjects in Dhanmondi', curriculum: 'Bangla Medium', course: 'Class 8', courseClass: 'Class 8', subjects: ['General Science', 'Maths'], studentCount: '1', studentGender: 'Female', preferredTutorGender: 'Female', tutorGender: 'Female', daysPerWeek: '4 days', preferredTime: '4:30 PM', method: 'Home Tutoring', salaryMax: 6000, salary: '6000', fullAddress: 'Dhanmondi 27, Dhaka', area: 'Dhanmondi', district: 'Dhaka', city: 'Dhaka', guardianName: 'Mrs. Salma', guardianPhone: '01755667788', status: 'OPEN', createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(), views: 35, applications: 3 },
+    { id: '88043', jobCode: '88043', title: 'O Level Physics & Chemistry', curriculum: 'English Medium', course: 'O Level', courseClass: 'O Level', subjects: ['Physics', 'Chemistry'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Any', tutorGender: 'Any', daysPerWeek: '3 days', preferredTime: '6:00 PM', method: 'Home Tutoring', salaryMax: 8500, salary: '8500', fullAddress: 'Uttara Sector 7, Dhaka', area: 'Uttara', district: 'Dhaka', city: 'Dhaka', guardianName: 'Engr. Masud', guardianPhone: '01899001122', status: 'OPEN', createdAt: new Date(Date.now() - 90 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 90 * 60 * 1000).toISOString(), views: 50, applications: 5 },
+    { id: 'JOB-80703', title: 'Class 6 Math Tuition in Mirpur', curriculum: 'Bangla Medium', course: 'Class 6', courseClass: 'Class 6', subjects: ['Math'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Any', tutorGender: 'Any', daysPerWeek: '5 days', preferredTime: '5:00 PM', method: 'Home Tutoring', salaryMax: 4000, salary: '4000', fullAddress: 'Mirpur-1, Dhaka', area: 'Mirpur', district: 'Dhaka', city: 'Dhaka', guardianName: 'Md. Rahman', guardianPhone: '01712345678', status: 'OPEN', createdAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(), views: 45, applications: 3, jobCode: 'JOB-80703' },
+    { id: 'JOB-80704', title: 'Class 10 Science Tuition in Banani', curriculum: 'English Medium', course: 'Class 10', courseClass: 'Class 10', subjects: ['Physics', 'Chemistry'], studentCount: '2', studentGender: 'Female', preferredTutorGender: 'Female', tutorGender: 'Female', daysPerWeek: '3 days', preferredTime: '6:30 PM', method: 'Online Tutoring', salaryMax: 6000, salary: '6000', fullAddress: 'Banani, Dhaka', area: 'Banani', district: 'Dhaka', city: 'Dhaka', guardianName: 'Mrs. Ahmed', guardianPhone: '01798765432', status: 'OPEN', createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), views: 32, applications: 1, jobCode: 'JOB-80704' },
+    { id: 'JOB-80705', title: 'O Level Physics Tuition in Gulshan', curriculum: 'A/O Levels', course: 'O Level', courseClass: 'O Level', subjects: ['Physics'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Male', tutorGender: 'Male', daysPerWeek: '4 days', preferredTime: '4:00 PM', method: 'Home Tutoring', salaryMax: 8000, salary: '8000', fullAddress: 'Gulshan-2, Dhaka', area: 'Gulshan', district: 'Dhaka', city: 'Dhaka', guardianName: 'Mr. Karim', guardianPhone: '01711111111', status: 'PENDING_REVIEW', createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), views: 18, applications: 0, jobCode: 'JOB-80705' },
+    { id: 'JOB-80706', title: 'Class 9 English Tuition in Chittagong', curriculum: 'English Version', course: 'Class 9', courseClass: 'Class 9', subjects: ['English'], studentCount: '1', studentGender: 'Mix', preferredTutorGender: 'Any', tutorGender: 'Any', daysPerWeek: '3 days', preferredTime: '5:30 PM', method: 'Batch Tutoring', salaryMax: 3500, salary: '3500', fullAddress: 'Agrabad, Chittagong', area: 'Agrabad', district: 'Chittagong', city: 'Chittagong', guardianName: 'Mr. Hossain', guardianPhone: '01822222222', status: 'OPEN', createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), views: 27, applications: 5, jobCode: 'JOB-80706' },
+    { id: 'JOB-80707', title: 'SSC Math Tuition in Sylhet', curriculum: 'Bangla Medium', course: 'Class 10', courseClass: 'Class 10', subjects: ['Math', 'Physics'], studentCount: '3', studentGender: 'Male', preferredTutorGender: 'Male', tutorGender: 'Male', daysPerWeek: '6 days', preferredTime: '6:00 PM', method: 'Home Tutoring', salaryMax: 5000, salary: '5000', fullAddress: 'Sylhet City', area: 'Sylhet', district: 'Sylhet', city: 'Sylhet', guardianName: 'Mr. Ali', guardianPhone: '01933333333', status: 'TEACHERS_APPLIED', createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), views: 56, applications: 8, jobCode: 'JOB-80707' },
+    { id: 'JOB-80708', title: 'Class 3 Nursery English Tuition in Gazipur', curriculum: 'English Medium', course: 'Nursery', courseClass: 'Nursery', subjects: ['English'], studentCount: '1', studentGender: 'Female', preferredTutorGender: 'Female', tutorGender: 'Female', daysPerWeek: '5 days', preferredTime: '4:30 PM', method: 'Home Tutoring', salaryMax: 3000, salary: '3000', fullAddress: 'Gazipur', area: 'Gazipur', district: 'Gazipur', city: 'Gazipur', guardianName: 'Mrs. Khatun', guardianPhone: '01644444444', status: 'OPEN', createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), views: 12, applications: 2, jobCode: 'JOB-80708' },
+    { id: 'JOB-80709', title: 'HSC Biology Tuition in Khulna', curriculum: 'Bangla Medium', course: 'Class 12', courseClass: 'Class 12', subjects: ['Biology', 'Chemistry'], studentCount: '2', studentGender: 'Mix', preferredTutorGender: 'Any', tutorGender: 'Any', daysPerWeek: '4 days', preferredTime: '7:00 PM', method: 'Online Tutoring', salaryMax: 5500, salary: '5500', fullAddress: 'Khulna', area: 'Khulna', district: 'Khulna', city: 'Khulna', guardianName: 'Mr. Das', guardianPhone: '01755555555', status: 'CONFIRMED', createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(), views: 89, applications: 12, jobCode: 'JOB-80709' },
+    { id: 'JOB-80710', title: 'Class 11 Physics Tuition in Rajshahi', curriculum: 'Bangla Medium', course: 'Class 11', courseClass: 'Class 11', subjects: ['Physics', 'Higher Math'], studentCount: '1', studentGender: 'Male', preferredTutorGender: 'Male', tutorGender: 'Male', daysPerWeek: '3 days', preferredTime: '5:00 PM', method: 'Home Tutoring', salaryMax: 4500, salary: '4500', fullAddress: 'Rajshahi', area: 'Rajshahi', district: 'Rajshahi', city: 'Rajshahi', guardianName: 'Mr. Islam', guardianPhone: '01866666666', status: 'OPEN', createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), views: 21, applications: 0, jobCode: 'JOB-80710' },
   ];
 
   mockTutors = [
@@ -375,6 +557,141 @@ function initMockData() {
 
   mockApplications = [
     {
+      id: 'APP-1024-1',
+      tuitionId: 'T-1024',
+      jobCode: 'T-1024',
+      tutorId: 'TT-1005',
+      tutorCode: 'TT-1005',
+      name: 'Karim Hossain',
+      phone: '01719988771',
+      email: 'karim.du@gmail.com',
+      gender: 'Male',
+      university: 'Dhaka University',
+      department: 'Department of Mathematics',
+      studentId: 'DU-MATH-19',
+      academicYear: 'Final Year / Masters',
+      district: 'Dhaka',
+      area: 'Dhanmondi',
+      experience: '4 years',
+      mediums: ['Bangla Medium', 'English Version'],
+      subjects: ['General Math', 'Higher Math'],
+      verificationStatus: 'verified',
+      status: 'active',
+      expectedSalary: 6000,
+      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Karim',
+      rating: 4.9,
+      message: 'Experienced mathematics tutor with 4+ years teaching Class 9-10 SSC curriculum. I live right in Dhanmondi and can provide structured tests.',
+      appliedAt: new Date(Date.now() - 3600000 * 6).toISOString(),
+    },
+    {
+      id: 'APP-1024-2',
+      tuitionId: 'T-1024',
+      jobCode: 'T-1024',
+      tutorId: 'TT-1001',
+      tutorCode: 'TT-1001',
+      name: 'Muntasir Mamun',
+      phone: '01700000001',
+      email: 'muntasir@example.com',
+      gender: 'Male',
+      university: 'BUET',
+      department: 'Computer Science & Engineering',
+      studentId: '1905001',
+      academicYear: 'Final Year / Graduate',
+      district: 'Dhaka',
+      area: 'Mirpur',
+      experience: '3 years',
+      mediums: ['Bangla Medium', 'English Version'],
+      subjects: ['Physics', 'Higher Math', 'General Math'],
+      verificationStatus: 'verified',
+      status: 'active',
+      expectedSalary: 6500,
+      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Muntasir',
+      rating: 4.9,
+      message: 'BUET engineering student with solid command over Mathematics. Proven track record of boosting student grades to A+.',
+      appliedAt: new Date(Date.now() - 3600000 * 18).toISOString(),
+    },
+    {
+      id: 'APP-1024-3',
+      tuitionId: 'T-1024',
+      jobCode: 'T-1024',
+      tutorId: 'TT-1006',
+      tutorCode: 'TT-1006',
+      name: 'Nusrat Jahan',
+      phone: '01822334455',
+      email: 'nusrat.brac@gmail.com',
+      gender: 'Female',
+      university: 'BRAC University',
+      department: 'Applied Mathematics',
+      studentId: '20101045',
+      academicYear: '4th Year',
+      district: 'Dhaka',
+      area: 'Lalmatia',
+      experience: '3 years',
+      mediums: ['Bangla Medium', 'English Version'],
+      subjects: ['General Math', 'Higher Math', 'Science'],
+      verificationStatus: 'verified',
+      status: 'active',
+      expectedSalary: 6000,
+      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Nusrat',
+      rating: 4.8,
+      message: 'Friendly and patient tutor who makes complex math theorems easy to understand. Regular weekly mock evaluations.',
+      appliedAt: new Date(Date.now() - 3600000 * 24).toISOString(),
+    },
+    {
+      id: 'APP-1024-4',
+      tuitionId: 'T-1024',
+      jobCode: 'T-1024',
+      tutorId: 'TT-1007',
+      tutorCode: 'TT-1007',
+      name: 'Tanvir Ahmed',
+      phone: '01911445566',
+      email: 'tanvir.nsu@gmail.com',
+      gender: 'Male',
+      university: 'North South University (NSU)',
+      department: 'Economics & Mathematics',
+      studentId: '2021-NSU-091',
+      academicYear: '3rd Year',
+      district: 'Dhaka',
+      area: 'Kalabagan',
+      experience: '2 years',
+      mediums: ['English Version', 'Bangla Medium'],
+      subjects: ['General Math', 'Physics'],
+      verificationStatus: 'verified',
+      status: 'active',
+      expectedSalary: 5500,
+      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=TanvirA',
+      rating: 4.7,
+      message: 'Dedicated tutor with strong analytical background. I provide chapter-wise question banks and exam tips.',
+      appliedAt: new Date(Date.now() - 3600000 * 30).toISOString(),
+    },
+    {
+      id: 'APP-1024-5',
+      tuitionId: 'T-1024',
+      jobCode: 'T-1024',
+      tutorId: 'TT-1008',
+      tutorCode: 'TT-1008',
+      name: 'Sadia Islam',
+      phone: '01755667788',
+      email: 'sadia.dmc@gmail.com',
+      gender: 'Female',
+      university: 'Dhaka Medical College (DMC)',
+      department: 'MBBS (3rd Year)',
+      studentId: 'DMC-2022-034',
+      academicYear: '3rd Year',
+      district: 'Dhaka',
+      area: 'Bakshibazar',
+      experience: '3 years',
+      mediums: ['Bangla Medium', 'English Version'],
+      subjects: ['Biology', 'General Math', 'General Science'],
+      verificationStatus: 'verified',
+      status: 'active',
+      expectedSalary: 6000,
+      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=SadiaI',
+      rating: 4.9,
+      message: 'Top-scoring tutor at DMC with great patience and disciplined teaching methodology. Specialized in Class 9-10 science and math.',
+      appliedAt: new Date(Date.now() - 3600000 * 40).toISOString(),
+    },
+    {
       id: 'APP-101',
       tuitionId: 'JOB-80703',
       tutorId: 'TT-1001',
@@ -428,6 +745,7 @@ function initMockData() {
     { id: 'G-001', fullName: 'Md. Rahman', phone: '01712345678', location: 'Mirpur, Dhaka', status: 'Active', totalTuitions: 2, activeTuitions: 1 },
     { id: 'G-002', fullName: 'Mrs. Ahmed', phone: '01798765432', location: 'Banani, Dhaka', status: 'Active', totalTuitions: 1, activeTuitions: 0 },
     { id: 'G-003', fullName: 'muntasir', phone: '01881167556', location: 'mirpur', status: 'Active', totalTuitions: 1, activeTuitions: 1 },
+    { id: 'G-004', fullName: 'Parent', phone: '01715998756', location: 'Dhanmondi, Dhaka', status: 'Active', totalTuitions: 3, activeTuitions: 2 },
   ];
 
   mockPayments = [
@@ -437,6 +755,25 @@ function initMockData() {
   ];
 
   mockDemos = [
+    { 
+      id: 'D-801', 
+      tuitionId: 'T-1024', 
+      jobCode: 'T-1024',
+      tutorId: 'TT-1005', 
+      tutorCode: 'TT-1005',
+      tutorName: 'Karim Hossain', 
+      university: 'Dhaka University',
+      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Karim',
+      guardianName: 'Parent', 
+      guardianPhone: '01715998756', 
+      date: 'Oct 28, 2026',
+      scheduledDate: '2026-10-28T17:00:00.000Z',
+      time: '05:00 PM', 
+      status: 'Scheduled',
+      location: 'Dhanmondi, Dhaka (Home)',
+      meetingLink: 'https://meet.google.com/abc-demo-t1024',
+      notes: 'Demo class for Mathematics (Class 9). Topic: Chapter 3 Algebraic Expressions.'
+    },
     { id: 'DEMO-001', tuitionId: 'JOB-80705', tutorId: 'TT-1001', tutorName: 'Muntasir Mamun', guardianName: 'Mr. Karim', guardianPhone: '01711111111', date: '2026-08-15', status: 'Scheduled' },
     { id: 'DEMO-002', tuitionId: 'JOB-80707', tutorId: 'TT-1003', tutorName: 'Rahim Uddin', guardianName: 'Mr. Ali', guardianPhone: '01822222222', date: '2026-08-10', status: 'Completed' },
   ];
@@ -763,8 +1100,18 @@ async function startServer() {
     }
   });
 
-  app.get("/api/tuitions", async (_req, res) => {
+  app.get("/api/tuitions", async (req, res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    let isAuthAdmin = false;
+    try {
+      let token = req.cookies?.tutorlink_auth_token;
+      if (req.headers.authorization?.startsWith('Bearer ')) token = req.headers.authorization.substring(7);
+      if (token) {
+        const u: any = verifyToken(token);
+        if (u && (u.role === 'admin' || u.role === 'super-admin')) isAuthAdmin = true;
+      }
+    } catch(e) {}
+
     try {
       const results = await db.select({
         t: tuitionRequests,
@@ -772,7 +1119,7 @@ async function startServer() {
         appCount: sql<number>`(SELECT count(*) FROM ${tutorApplications} WHERE tuition_id = ${tuitionRequests.id})`
       }).from(tuitionRequests)
       .leftJoin(guardianProfiles, eq(tuitionRequests.guardianId, guardianProfiles.id))
-      .where(sql`lower(${tuitionRequests.status}) IN ('open', 'approved', 'teachers_applied')`)
+      .where(sql`lower(${tuitionRequests.status}) IN ('open', 'approved', 'teachers_applied', 'shortlisted')`)
       .orderBy(desc(tuitionRequests.createdAt));
 
       const dbTuitions = results.map((r: any) => ({
@@ -791,16 +1138,30 @@ async function startServer() {
       });
 
       const extraMocks = getMockTuitions()
-        .filter((t: any) => t.status === 'OPEN' || t.status === 'APPROVED' || t.status === 'CONFIRMED' || t.status === 'TEACHERS_APPLIED')
+        .filter((t: any) => t.status === 'OPEN' || t.status === 'APPROVED' || t.status === 'CONFIRMED' || t.status === 'TEACHERS_APPLIED' || t.status === 'SHORTLISTED')
         .filter((m: any) => !existingIds.has(String(m.id)) && !existingIds.has(String(m.jobCode)) && (!m.realId || !existingIds.has(String(m.realId))));
 
-      res.json([...dbTuitions, ...extraMocks]);
+      const all = [...dbTuitions, ...extraMocks].map(t => maskContactDetailsForPublic(t, isAuthAdmin));
+      res.json(all);
     } catch (e) {
-      res.json(getMockTuitions().filter((t: any) => t.status === 'OPEN' || t.status === 'APPROVED' || t.status === 'CONFIRMED' || t.status === 'TEACHERS_APPLIED'));
+      const fallback = getMockTuitions()
+        .filter((t: any) => t.status === 'OPEN' || t.status === 'APPROVED' || t.status === 'CONFIRMED' || t.status === 'TEACHERS_APPLIED' || t.status === 'SHORTLISTED')
+        .map(t => maskContactDetailsForPublic(t, isAuthAdmin));
+      res.json(fallback);
     }
   });
 
   app.get("/api/tuitions/:id", async (req, res) => {
+    let isAuthAdmin = false;
+    try {
+      let token = req.cookies?.tutorlink_auth_token;
+      if (req.headers.authorization?.startsWith('Bearer ')) token = req.headers.authorization.substring(7);
+      if (token) {
+        const u: any = verifyToken(token);
+        if (u && (u.role === 'admin' || u.role === 'super-admin')) isAuthAdmin = true;
+      }
+    } catch(e) {}
+
     try {
       const paramId = req.params.id;
       const [result] = await db.select({
@@ -819,18 +1180,18 @@ async function startServer() {
           guardianAddress: result.g?.address,
           appCount: result.appCount
         };
-        return res.json(mapTuitionToOld(tuition));
+        return res.json(maskContactDetailsForPublic(mapTuitionToOld(tuition), isAuthAdmin));
       }
 
       const mock = mockTuitions.find((t: any) => t.id === paramId || t.jobCode === paramId);
       if (mock) {
-        return res.json(mapTuitionToOld(mock));
+        return res.json(maskContactDetailsForPublic(mapTuitionToOld(mock), isAuthAdmin));
       }
       res.status(404).json({ error: "Not found" });
     } catch (e) {
       const mock = mockTuitions.find((t: any) => t.id === req.params.id || t.jobCode === req.params.id);
       if (mock) {
-        res.json(mapTuitionToOld(mock));
+        res.json(maskContactDetailsForPublic(mapTuitionToOld(mock), isAuthAdmin));
       } else {
         res.status(404).json({ error: "Not found" });
       }
@@ -1106,6 +1467,527 @@ async function startServer() {
     } catch (e: any) {
       console.error(e);
       res.status(500).json({ error: e.message || "Failed to update profile" });
+    }
+  });
+
+  // Helper to find or establish tutor profile for user
+  const resolveTutorProfile = async (user: any) => {
+    if (!user) return null;
+    let tutor = mockTutors.find((m: any) => 
+      (user.id && (m.id === user.id || m.tutorCode === user.id || m.userId === user.id)) ||
+      (user.phone && m.phone === user.phone) ||
+      (user.email && m.email === user.email)
+    );
+
+    if (!tutor) {
+      try {
+        const dbT = await db.select().from(tutorProfiles)
+          .where(sql`${tutorProfiles.userId}::text = ${user.id} OR ${tutorProfiles.primaryPhone} = ${user.phone}`).limit(1);
+        if (dbT.length > 0) tutor = dbT[0];
+      } catch (e) {}
+    }
+
+    if (!tutor) {
+      const code = 'TT-' + Math.floor(10000 + Math.random() * 90000);
+      tutor = {
+        id: code,
+        tutorCode: code,
+        userId: user.id,
+        fullName: user.name || 'Tutor',
+        phone: user.phone,
+        primaryPhone: user.phone,
+        email: user.email,
+        status: 'active',
+        verificationStatus: 'pending',
+        university: user.university || 'University Student',
+        department: user.department || 'General',
+        mediums: ['Bangla Medium', 'English Version'],
+        classes: ['Class 9-10 (SSC)'],
+        subjects: ['Mathematics'],
+        preferredAreas: ['Mirpur', 'Dhanmondi'],
+        profileCompletion: 45,
+        rating: 5.0,
+        reviewsCount: 0
+      };
+      mockTutors.unshift(tutor);
+    }
+    return tutor;
+  };
+
+  // =====================================================================
+  // COMPLETE TUTOR PROFILE API MODULE (/api/tutor/me/...)
+  // =====================================================================
+
+  // 1. Get Full Private Profile
+  app.get("/api/tutor/me/profile", authMiddleware, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+      const tutor = await resolveTutorProfile(user);
+      if (!tutor) return res.status(404).json({ error: "Tutor profile not found" });
+
+      // Aggregate normalized records
+      let education: any[] = tutor.educationHistory || [];
+      let experience: any[] = [];
+      let preferences: any = tutor.tutoringInfo || {};
+      let areas: any[] = tutor.preferredAreas || [];
+      let availability: any[] = tutor.availableDays || [];
+      let documents: any[] = [];
+      let paymentInfo: any = {};
+      let emergencyContacts: any = tutor.guardianInfo || {};
+
+      try {
+        const dbEdu = await db.select().from(tutorEducation).where(sql`${tutorEducation.tutorId}::text = ${tutor.id} OR ${tutorEducation.tutorId}::text = ${user.id}`);
+        if (dbEdu.length > 0) education = dbEdu;
+
+        const dbExp = await db.select().from(tutorExperience).where(sql`${tutorExperience.tutorId}::text = ${tutor.id} OR ${tutorExperience.tutorId}::text = ${user.id}`);
+        if (dbExp.length > 0) experience = dbExp;
+
+        const dbPref = await db.select().from(tutorPreferences).where(sql`${tutorPreferences.tutorId}::text = ${tutor.id} OR ${tutorPreferences.tutorId}::text = ${user.id}`).limit(1);
+        if (dbPref.length > 0) preferences = dbPref[0];
+
+        const dbDocs = await db.select().from(tutorDocuments).where(sql`${tutorDocuments.tutorId}::text = ${tutor.id} OR ${tutorDocuments.tutorId}::text = ${user.id}`);
+        if (dbDocs.length > 0) documents = dbDocs;
+
+        const dbPay = await db.select().from(tutorPaymentInfo).where(sql`${tutorPaymentInfo.tutorId}::text = ${tutor.id} OR ${tutorPaymentInfo.tutorId}::text = ${user.id}`).limit(1);
+        if (dbPay.length > 0) paymentInfo = dbPay[0];
+
+        const dbEm = await db.select().from(tutorEmergencyContacts).where(sql`${tutorEmergencyContacts.tutorId}::text = ${tutor.id} OR ${tutorEmergencyContacts.tutorId}::text = ${user.id}`).limit(1);
+        if (dbEm.length > 0) emergencyContacts = dbEm[0];
+      } catch (dbErr) {}
+
+      const completion = computeProfileCompletion(tutor, {
+        education,
+        experience,
+        preferences,
+        areas,
+        availability,
+        documents,
+        emergency: emergencyContacts
+      });
+
+      res.json({
+        profile: {
+          ...tutor,
+          education,
+          experience,
+          preferences,
+          areas,
+          availability,
+          documents,
+          paymentInfo,
+          emergencyContacts,
+          completionScore: completion.score
+        },
+        completion
+      });
+    } catch (e: any) {
+      console.error("Failed to load profile:", e);
+      res.status(500).json({ error: "Failed to load tutor profile" });
+    }
+  });
+
+  // 2. PATCH Profile by Section with Zod Validation & Audit Log
+  app.patch("/api/tutor/me/profile/:section", authMiddleware, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { section } = req.params;
+      const body = req.body;
+      const tutor = await resolveTutorProfile(user);
+      if (!tutor) return res.status(404).json({ error: "Tutor profile not found" });
+
+      let validatedData: any = {};
+
+      if (section === 'personal') {
+        validatedData = personalSectionSchema.parse(body);
+        if (validatedData.shortBio) validatedData.shortBio = sanitizeBioText(validatedData.shortBio);
+        if (validatedData.tagline) validatedData.tagline = sanitizeBioText(validatedData.tagline);
+        tutor.fullName = validatedData.fullName;
+        tutor.name = validatedData.fullName;
+        tutor.gender = validatedData.gender;
+        tutor.dateOfBirth = validatedData.dateOfBirth;
+        tutor.dob = validatedData.dateOfBirth;
+        tutor.bloodGroup = validatedData.bloodGroup;
+        tutor.religion = validatedData.religion;
+        tutor.maritalStatus = validatedData.maritalStatus;
+        tutor.nationality = validatedData.nationality;
+        tutor.nidNumber = validatedData.nidNumber;
+        tutor.tagline = validatedData.tagline;
+        tutor.shortBio = validatedData.shortBio;
+        if (validatedData.photo) tutor.profilePhotoUrl = validatedData.photo;
+      } else if (section === 'contact') {
+        validatedData = contactSectionSchema.parse(body);
+        tutor.phone = validatedData.primaryPhone;
+        tutor.primaryPhone = validatedData.primaryPhone;
+        tutor.secondaryPhone = validatedData.secondaryPhone;
+        tutor.whatsappNumber = validatedData.whatsappNumber;
+        tutor.email = validatedData.email;
+        tutor.presentAddress = validatedData.presentAddress;
+        tutor.permanentAddress = validatedData.permanentAddress;
+        tutor.sameAsPresentAddress = validatedData.sameAsPresentAddress;
+      } else if (section === 'preferences') {
+        validatedData = preferencesSectionSchema.parse(body);
+        tutor.mediums = validatedData.mediums;
+        tutor.classes = validatedData.classes;
+        tutor.subjects = validatedData.subjects;
+        tutor.expectedSalaryMin = validatedData.expectedSalaryMin;
+        tutor.expectedSalaryMax = validatedData.expectedSalaryMax;
+        tutor.expectedSalary = `৳${validatedData.expectedSalaryMin} - ৳${validatedData.expectedSalaryMax}`;
+        tutor.tutoringMethod = validatedData.tuitionTypes;
+        tutor.availableDays = validatedData.preferredDaysPerWeek ? [validatedData.preferredDaysPerWeek] : tutor.availableDays;
+      } else if (section === 'areas') {
+        validatedData = areasSectionSchema.parse(body);
+        tutor.preferredAreas = validatedData.preferredAreas;
+      } else if (section === 'availability') {
+        validatedData = availabilitySectionSchema.parse(body);
+        tutor.availableSlots = validatedData.slots;
+        tutor.isOpenForTuition = validatedData.isOpenForTuition;
+      } else if (section === 'payment') {
+        validatedData = paymentInfoSectionSchema.parse(body);
+        tutor.paymentInfo = validatedData;
+      } else if (section === 'emergency') {
+        validatedData = emergencyContactSectionSchema.parse(body);
+        tutor.guardianInfo = validatedData;
+      } else if (section === 'privacy') {
+        validatedData = privacySectionSchema.parse(body);
+        tutor.profileVisibility = validatedData.profileVisibility;
+        tutor.hideLastName = validatedData.hideLastName;
+      } else {
+        return res.status(400).json({ error: `Invalid profile section: ${section}` });
+      }
+
+      // Recompute completion score
+      const completion = computeProfileCompletion(tutor);
+      tutor.profileCompletion = completion.score;
+      tutor.completion = completion.score;
+      tutor.updatedAt = new Date().toISOString();
+
+      // Record Audit Log if DB connected
+      try {
+        if (user.id) {
+          await db.insert(profileAuditLogs).values({
+            userId: user.id,
+            changedBy: user.id,
+            section,
+            newValue: JSON.stringify(validatedData),
+            ipAddress: req.ip || '',
+            userAgent: req.headers['user-agent'] || ''
+          });
+        }
+      } catch (auditErr) {}
+
+      res.json({
+        success: true,
+        message: `${section.charAt(0).toUpperCase() + section.slice(1)} information updated successfully!`,
+        section,
+        profile: tutor,
+        completion
+      });
+    } catch (e: any) {
+      if (e?.name === 'ZodError') {
+        return res.status(400).json({ error: e.errors?.[0]?.message || 'Validation failed', details: e.errors });
+      }
+      console.error(`Error saving ${req.params.section}:`, e);
+      res.status(500).json({ error: e.message || 'Failed to update section' });
+    }
+  });
+
+  // 3. Education CRUD
+  app.post("/api/tutor/me/education", authMiddleware, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const validated = educationEntrySchema.parse(req.body);
+      const tutor = await resolveTutorProfile(user);
+      if (!tutor) return res.status(404).json({ error: "Tutor profile not found" });
+
+      const newId = validated.id || ('edu-' + Date.now());
+      const newEntry = { ...validated, id: newId, tutorId: tutor.id, createdAt: new Date() };
+
+      tutor.educationHistory = tutor.educationHistory || [];
+      tutor.educationHistory.unshift(newEntry);
+
+      try {
+        await db.insert(tutorEducation).values({
+          level: validated.level,
+          degreeName: validated.degreeName,
+          groupMajor: validated.groupMajor,
+          institute: validated.institute,
+          boardUniversity: validated.boardUniversity,
+          passingYear: validated.passingYear,
+          resultType: validated.resultType,
+          resultValue: validated.resultValue,
+          currentlyStudying: validated.currentlyStudying,
+          expectedGraduation: validated.expectedGraduation,
+          studentId: validated.studentId,
+          department: validated.department,
+          academicYear: validated.academicYear,
+          certificateUrl: validated.certificateUrl,
+          tutorId: tutor.id
+        });
+      } catch (dbErr) {}
+
+      const completion = computeProfileCompletion(tutor);
+      tutor.profileCompletion = completion.score;
+      res.json({ success: true, entry: newEntry, completion });
+    } catch (e: any) {
+      if (e?.name === 'ZodError') {
+        return res.status(400).json({ error: e.errors?.[0]?.message || 'Validation failed' });
+      }
+      res.status(500).json({ error: e.message || 'Failed to add education record' });
+    }
+  });
+
+  app.delete("/api/tutor/me/education/:id", authMiddleware, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { id } = req.params;
+      const tutor = await resolveTutorProfile(user);
+      if (!tutor) return res.status(404).json({ error: "Tutor profile not found" });
+
+      tutor.educationHistory = (tutor.educationHistory || []).filter((e: any) => e.id !== id);
+
+      try {
+        await db.delete(tutorEducation).where(sql`${tutorEducation.id}::text = ${id} AND ${tutorEducation.tutorId}::text = ${tutor.id}`);
+      } catch (dbErr) {}
+
+      const completion = computeProfileCompletion(tutor);
+      tutor.profileCompletion = completion.score;
+      res.json({ success: true, completion });
+    } catch (e: any) {
+      res.status(500).json({ error: 'Failed to delete education record' });
+    }
+  });
+
+  // 4. Experience CRUD
+  app.post("/api/tutor/me/experience", authMiddleware, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const validated = experienceEntrySchema.parse(req.body);
+      const tutor = await resolveTutorProfile(user);
+      if (!tutor) return res.status(404).json({ error: "Tutor profile not found" });
+
+      const newId = validated.id || ('exp-' + Date.now());
+      const newEntry = { ...validated, id: newId, tutorId: tutor.id, createdAt: new Date() };
+
+      tutor.pastTuitions = tutor.pastTuitions || [];
+      tutor.pastTuitions.unshift(newEntry);
+
+      try {
+        await db.insert(tutorExperience).values({
+          subject: validated.subject,
+          courseClass: validated.courseClass,
+          duration: validated.duration,
+          role: validated.role,
+          referenceName: validated.referenceName,
+          referencePhone: validated.referencePhone,
+          description: validated.description,
+          achievements: validated.achievements,
+          introVideoUrl: validated.introVideoUrl,
+          tutorId: tutor.id
+        });
+      } catch (dbErr) {}
+
+      const completion = computeProfileCompletion(tutor);
+      tutor.profileCompletion = completion.score;
+      res.json({ success: true, entry: newEntry, completion });
+    } catch (e: any) {
+      if (e?.name === 'ZodError') {
+        return res.status(400).json({ error: e.errors?.[0]?.message || 'Validation failed' });
+      }
+      res.status(500).json({ error: e.message || 'Failed to add experience record' });
+    }
+  });
+
+  app.delete("/api/tutor/me/experience/:id", authMiddleware, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { id } = req.params;
+      const tutor = await resolveTutorProfile(user);
+      if (!tutor) return res.status(404).json({ error: "Tutor profile not found" });
+
+      tutor.pastTuitions = (tutor.pastTuitions || []).filter((e: any) => e.id !== id);
+
+      try {
+        await db.delete(tutorExperience).where(sql`${tutorExperience.id}::text = ${id} AND ${tutorExperience.tutorId}::text = ${tutor.id}`);
+      } catch (dbErr) {}
+
+      const completion = computeProfileCompletion(tutor);
+      tutor.profileCompletion = completion.score;
+      res.json({ success: true, completion });
+    } catch (e: any) {
+      res.status(500).json({ error: 'Failed to delete experience record' });
+    }
+  });
+
+  // 5. Completion Score API
+  app.get("/api/tutor/me/completion", authMiddleware, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const tutor = await resolveTutorProfile(user);
+      if (!tutor) return res.status(404).json({ error: "Tutor not found" });
+      const result = computeProfileCompletion(tutor);
+      res.json(result);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to calculate profile completion" });
+    }
+  });
+
+  // 6. Public Tutor Profile Whitelist API
+  app.get("/api/public/tutors/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      let tutor = mockTutors.find((t: any) => t.id === id || t.tutorCode === id);
+      if (!tutor) {
+        try {
+          const dbT = await db.select().from(tutorProfiles)
+            .where(sql`${tutorProfiles.id}::text = ${id} OR ${tutorProfiles.tutorCode} = ${id}`).limit(1);
+          if (dbT.length > 0) tutor = dbT[0];
+        } catch (e) {}
+      }
+      if (!tutor) return res.status(404).json({ error: "Tutor not found" });
+      const serialized = serializeTutorForPublic(tutor);
+      res.json(serialized);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch public tutor details" });
+    }
+  });
+
+  // =====================================================================
+  // UNIFIED BOOKMARKS API (/api/bookmarks)
+  // =====================================================================
+
+  // In-memory fallback if Postgres table is being created
+  let mockBookmarksStore: any[] = [];
+
+  // Get Bookmarked IDs (for lightweight icon state sync)
+  app.get("/api/bookmarks/ids", authMiddleware, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+      const tuitionIds: string[] = [];
+      const tutorIds: string[] = [];
+
+      try {
+        const rows = await db.select({
+          targetType: bookmarksTable.targetType,
+          targetId: bookmarksTable.targetId
+        }).from(bookmarksTable)
+          .where(sql`${bookmarksTable.userId}::text = ${user.id}`);
+
+        rows.forEach(r => {
+          if (r.targetType === 'tuition') tuitionIds.push(r.targetId);
+          if (r.targetType === 'tutor') tutorIds.push(r.targetId);
+        });
+      } catch (dbErr) {
+        // Fallback to store
+        mockBookmarksStore.filter(b => b.userId === user.id).forEach(b => {
+          if (b.targetType === 'tuition') tuitionIds.push(b.targetId);
+          if (b.targetType === 'tutor') tutorIds.push(b.targetId);
+        });
+      }
+
+      res.json({ tuitionIds: Array.from(new Set(tuitionIds)), tutorIds: Array.from(new Set(tutorIds)) });
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to load bookmark IDs" });
+    }
+  });
+
+  // Add Bookmark (Idempotent)
+  app.post("/api/bookmarks", authMiddleware, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+      const validated = bookmarkInputSchema.parse(req.body);
+
+      try {
+        await db.insert(bookmarksTable).values({
+          userId: user.id,
+          targetType: validated.targetType,
+          targetId: validated.targetId,
+          personalNote: validated.personalNote,
+          remindMe: validated.remindMe
+        }).onConflictDoNothing();
+      } catch (dbErr) {
+        const exists = mockBookmarksStore.some(b => b.userId === user.id && b.targetType === validated.targetType && b.targetId === validated.targetId);
+        if (!exists) {
+          mockBookmarksStore.push({
+            id: 'bm-' + Date.now(),
+            userId: user.id,
+            targetType: validated.targetType,
+            targetId: validated.targetId,
+            personalNote: validated.personalNote,
+            createdAt: new Date().toISOString()
+          });
+        }
+      }
+
+      res.json({ success: true, message: "Bookmarked successfully!" });
+    } catch (e: any) {
+      if (e?.name === 'ZodError') {
+        return res.status(400).json({ error: e.errors?.[0]?.message || 'Invalid bookmark payload' });
+      }
+      res.status(500).json({ error: e.message || "Failed to save bookmark" });
+    }
+  });
+
+  // Remove Bookmark
+  app.delete("/api/bookmarks/:targetType/:targetId", authMiddleware, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { targetType, targetId } = req.params;
+      if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+      try {
+        await db.delete(bookmarksTable).where(
+          sql`${bookmarksTable.userId}::text = ${user.id} AND ${bookmarksTable.targetType} = ${targetType} AND ${bookmarksTable.targetId} = ${targetId}`
+        );
+      } catch (dbErr) {
+        mockBookmarksStore = mockBookmarksStore.filter(b => !(b.userId === user.id && b.targetType === targetType && b.targetId === targetId));
+      }
+
+      res.json({ success: true, message: "Bookmark removed" });
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to remove bookmark" });
+    }
+  });
+
+  // List Full Bookmarks (with joined item details)
+  app.get("/api/bookmarks", authMiddleware, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { type } = req.query; // 'tuition' or 'tutor'
+      if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+      const targetType = (type as string) || (user.role === 'guardian' ? 'tutor' : 'tuition');
+      let bookmarkedIds: string[] = [];
+
+      try {
+        const rows = await db.select().from(bookmarksTable)
+          .where(sql`${bookmarksTable.userId}::text = ${user.id} AND ${bookmarksTable.targetType} = ${targetType}`)
+          .orderBy(desc(bookmarksTable.createdAt));
+        bookmarkedIds = rows.map(r => r.targetId);
+      } catch (dbErr) {
+        bookmarkedIds = mockBookmarksStore
+          .filter(b => b.userId === user.id && b.targetType === targetType)
+          .map(b => b.targetId);
+      }
+
+      if (targetType === 'tuition') {
+        const idSet = new Set(bookmarkedIds);
+        const allTuitions = getMockTuitions();
+        const savedJobs = allTuitions.filter((t: any) => idSet.has(t.id) || idSet.has(t.jobCode));
+        return res.json({ items: savedJobs, targetType });
+      } else {
+        const idSet = new Set(bookmarkedIds);
+        const allTutors = mockTutors.map(serializeTutorForPublic);
+        const savedTutorsList = allTutors.filter((t: any) => idSet.has(t.id) || idSet.has(t.tutorCode) || idSet.has(t.userId));
+        return res.json({ items: savedTutorsList, targetType });
+      }
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch bookmarks" });
     }
   });
 
@@ -1468,6 +2350,420 @@ async function startServer() {
       );
       res.json(mockMatches);
     }
+  });
+
+  // ================= GUARDIAN ROUTES =================
+  // 1. Get Guardian's Tuition Requests
+  app.get("/api/guardian/my-tuitions", async (req, res) => {
+    try {
+      let token = req.cookies?.tutorlink_auth_token;
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+      }
+      let userPhone = (req.query.phone as string) || '';
+      if (token) {
+        const decoded: any = verifyToken(token);
+        if (decoded && decoded.phone) userPhone = decoded.phone;
+      }
+      if (!userPhone) userPhone = '01715998756'; // Default guardian phone for preview/demo
+
+      // Fetch tuitions belonging to guardian or default tuitions
+      const primaryTuitions = mockTuitions.filter((t: any) => 
+        (t.guardianPhone && (t.guardianPhone === userPhone || t.guardianPhone === '01715998756')) ||
+        t.id === 'T-1024' || t.id === 'T-998' || t.id === 'T-1045' ||
+        (t.jobCode && (t.jobCode.startsWith('TR-') || t.jobCode === 'T-1024'))
+      );
+
+      // De-duplicate by id or jobCode
+      const seen = new Set<string>();
+      const result: any[] = [];
+      for (const t of primaryTuitions) {
+        const key = t.id || t.jobCode;
+        if (!seen.has(key)) {
+          seen.add(key);
+
+          // Count applicants
+          const appCount = mockApplications.filter((a: any) => 
+            a.tuitionId === t.id || a.jobCode === t.id || a.tuitionId === t.jobCode
+          ).length;
+
+          // Check demo
+          const demoMatch = mockDemos.find((d: any) => 
+            d.tuitionId === t.id || d.jobCode === t.id || d.tuitionId === t.jobCode
+          );
+
+          result.push({
+            ...t,
+            applications: Math.max(t.applications || 0, appCount),
+            demo: demoMatch || null,
+            guardianSelectedTutor: t.guardianSelectedTutorId ? {
+              id: t.guardianSelectedTutorId,
+              name: t.guardianSelectedTutorName,
+              preferredDate: t.guardianPreferredDate,
+              notes: t.guardianDemoNotes,
+              selectedAt: t.guardianSelectedAt
+            } : null
+          });
+        }
+      }
+
+      res.json(result);
+    } catch (e) {
+      console.error("Guardian tuitions error:", e);
+      res.status(500).json({ error: "Failed to fetch guardian tuitions" });
+    }
+  });
+
+  // 2. Get Applicants for a specific Tuition (Guardian View)
+  app.get("/api/guardian/tuitions/:id/applicants", async (req, res) => {
+    try {
+      let token = req.cookies?.tutorlink_auth_token;
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+      }
+      let isAuthGuardianOrAdmin = false;
+      if (token) {
+        try {
+          const decoded: any = verifyToken(token);
+          if (decoded && (decoded.role === 'guardian' || decoded.role === 'admin' || decoded.role === 'super-admin')) {
+            isAuthGuardianOrAdmin = true;
+          }
+        } catch(e) {}
+      }
+      if (!isAuthGuardianOrAdmin) {
+        return res.status(401).json({ error: "Unauthorized. Guardian or Admin login required." });
+      }
+
+      const idParam = req.params.id;
+      const mockT = mockTuitions.find((m: any) => m.id === idParam || m.jobCode === idParam || m.realId === idParam);
+      const possibleIds = new Set<string>([idParam]);
+      if (mockT) {
+        if (mockT.id) possibleIds.add(mockT.id);
+        if (mockT.jobCode) possibleIds.add(mockT.jobCode);
+        if (mockT.realId) possibleIds.add(mockT.realId);
+      }
+
+      const matchingApps = mockApplications.filter((a: any) => 
+        possibleIds.has(a.tuitionId) || (a.jobCode && possibleIds.has(a.jobCode))
+      );
+
+      const activeDemo = mockDemos.find((d: any) => 
+        possibleIds.has(d.tuitionId) || (d.jobCode && possibleIds.has(d.jobCode))
+      );
+
+      const enriched = matchingApps.map((a: any) => {
+        const isSelected = (mockT?.guardianSelectedTutorId === (a.tutorId || a.tutorCode || a.id)) || a.status === 'guardian_selected';
+        const hasDemo = activeDemo && (activeDemo.tutorId === a.tutorId || activeDemo.tutorCode === a.tutorCode);
+        return {
+          ...a,
+          avatar: a.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(a.name || 'Tutor')}`,
+          rating: a.rating || 4.8,
+          isSelected,
+          demoStatus: hasDemo ? (activeDemo.status || 'Scheduled') : (isSelected ? 'Pending Admin Assignment' : 'none'),
+          demoDate: hasDemo ? (activeDemo.date || activeDemo.scheduledDate) : null,
+          demoTime: hasDemo ? activeDemo.time : null
+        };
+      });
+
+      res.json(enriched);
+    } catch (e) {
+      console.error("Guardian applicants error:", e);
+      res.json([]);
+    }
+  });
+
+  // 3. Guardian Selects a Tutor for Demo Class -> Alert Admin
+  app.post("/api/guardian/tuitions/:id/select-tutor", async (req, res) => {
+    try {
+      let token = req.cookies?.tutorlink_auth_token;
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+      }
+      let isAuthGuardianOrAdmin = false;
+      if (token) {
+        try {
+          const decoded: any = verifyToken(token);
+          if (decoded && (decoded.role === 'guardian' || decoded.role === 'admin' || decoded.role === 'super-admin')) {
+            isAuthGuardianOrAdmin = true;
+          }
+        } catch(e) {}
+      }
+      if (!isAuthGuardianOrAdmin) {
+        return res.status(401).json({ error: "Unauthorized. Guardian or Admin login required." });
+      }
+
+      const { id } = req.params;
+      const { tutorId, preferredDate, notes } = req.body;
+      if (!tutorId) {
+        return res.status(400).json({ error: "Please select a tutor." });
+      }
+
+      // Find tuition
+      const mockT = mockTuitions.find((m: any) => m.id === id || m.jobCode === id || m.realId === id);
+      if (!mockT) {
+        return res.status(404).json({ error: "Tuition request not found." });
+      }
+
+      // Find tutor/applicant
+      let applicant = mockApplications.find((a: any) => 
+        (a.tuitionId === id || a.jobCode === id) && (a.tutorId === tutorId || a.tutorCode === tutorId || a.id === tutorId)
+      );
+      if (!applicant) {
+        applicant = mockApplications.find((a: any) => a.tutorId === tutorId || a.tutorCode === tutorId || a.id === tutorId);
+      }
+      const tutorObj = mockTutors.find((m: any) => m.id === tutorId || m.tutorCode === tutorId);
+
+      const tutorName = applicant?.name || tutorObj?.fullName || tutorObj?.name || 'Selected Tutor';
+      const tutorCode = applicant?.tutorCode || tutorObj?.tutorCode || tutorId;
+
+      // 3. Update tuition state with Shortlist (Cap of 3 max)
+      mockT.shortlistedTutorIds = mockT.shortlistedTutorIds || [];
+      if (!mockT.shortlistedTutorIds.includes(tutorCode)) {
+        if (mockT.shortlistedTutorIds.length >= 3) {
+          return res.status(400).json({ 
+            error: "You can shortlist a maximum of 3 tutors for this tuition request. Please remove or proceed with existing shortlisted tutors." 
+          });
+        }
+        mockT.shortlistedTutorIds.push(tutorCode);
+      }
+
+      mockT.guardianSelectedTutorId = tutorCode;
+      mockT.guardianSelectedTutorName = tutorName;
+      mockT.guardianPreferredDate = preferredDate || 'Flexible';
+      mockT.guardianDemoNotes = notes || '';
+      mockT.guardianSelectedAt = new Date().toISOString();
+      mockT.status = 'SHORTLISTED';
+      mockT.updatedAt = new Date().toISOString();
+
+      // Update applicant state
+      if (applicant) {
+        applicant.status = 'guardian_selected';
+        applicant.selectedAt = new Date().toISOString();
+      }
+
+      // Trigger Teacher Alert for Admin
+      const alertId = 'ALERT-' + Date.now();
+      const newAlert = {
+        id: alertId,
+        jobId: mockT.id,
+        jobCode: mockT.jobCode || mockT.id,
+        jobTitle: mockT.title || mockT.subject || `Tuition ${mockT.id}`,
+        type: 'GUARDIAN_SELECTED_TUTOR',
+        tutorId: tutorCode,
+        tutorName: tutorName,
+        tutorUniversity: applicant?.university || tutorObj?.university || 'University',
+        tutorDepartment: applicant?.department || tutorObj?.department || '',
+        guardianName: mockT.guardianName || 'Parent',
+        guardianPhone: mockT.guardianPhone || '',
+        preferredDate: preferredDate || 'Flexible',
+        notes: notes || '',
+        message: `Guardian ${mockT.guardianName || 'Parent'} shortlisted tutor ${tutorName} (${tutorCode}) [${mockT.shortlistedTutorIds.length}/3] for Demo Class! Please assign the demo class schedule.`,
+        timestamp: new Date().toISOString(),
+        isRead: false
+      };
+      mockTeacherAlerts.unshift(newAlert);
+
+      // Trigger Admin Notification
+      mockNotifications.unshift({
+        id: 'NOTIF-' + Date.now(),
+        type: 'GUARDIAN_SELECTED_TUTOR',
+        title: '🎯 Demo Class Requested by Guardian!',
+        message: `Guardian shortlisted ${tutorName} (${mockT.shortlistedTutorIds.length}/3) for Demo on ${mockT.title || mockT.id}. Preferred: ${preferredDate || 'Flexible'}.`,
+        tuitionId: mockT.id,
+        createdAt: new Date().toISOString(),
+        isRead: false
+      });
+
+      res.json({
+        success: true,
+        message: `Tutor ${tutorName} shortlisted (${mockT.shortlistedTutorIds.length}/3)! Sent to Admin for demo scheduling.`,
+        tuition: mockT,
+        shortlistedCount: mockT.shortlistedTutorIds.length
+      });
+    } catch (e: any) {
+      console.error("Select tutor error:", e);
+      res.status(500).json({ error: e.message || "Failed to select tutor" });
+    }
+  });
+
+  // 3b. Guardian Cancels Tuition Request with Mandatory Reason
+  app.post("/api/guardian/tuitions/:id/cancel", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reason, details } = req.body;
+      const mockT = mockTuitions.find((m: any) => m.id === id || m.jobCode === id || m.realId === id);
+      if (!mockT) {
+        return res.status(404).json({ error: "Tuition request not found." });
+      }
+
+      const currStatus = (mockT.status || 'OPEN').toUpperCase();
+      if (currStatus === 'CONFIRMED' || currStatus === 'ASSIGNED') {
+        return res.status(400).json({ 
+          error: "This tuition has already been confirmed/assigned to a tutor. Please contact Admin/Support directly to request cancellation." 
+        });
+      }
+
+      const effectiveReason = reason || details || 'Cancelled by Guardian';
+      mockT.status = 'CANCELLED';
+      mockT.cancelReason = effectiveReason;
+      mockT.cancelledBy = 'guardian';
+      mockT.cancelledAt = new Date().toISOString();
+      mockT.updatedAt = new Date().toISOString();
+
+      try {
+        await db.update(tuitionRequests).set({
+          status: 'cancelled',
+          cancelledAt: new Date(),
+          updatedAt: new Date()
+        }).where(sql`${tuitionRequests.id}::text = ${id} OR ${tuitionRequests.jobCode} = ${id}`);
+      } catch (dbErr) {}
+
+      mockNotifications.unshift({
+        id: 'NOTIF-' + Date.now(),
+        type: 'TUITION_CANCELLED_BY_GUARDIAN',
+        title: '⚠️ Tuition Cancelled by Guardian',
+        message: `Guardian cancelled tuition ${mockT.title || mockT.id}. Reason: ${effectiveReason}`,
+        tuitionId: mockT.id,
+        createdAt: new Date().toISOString(),
+        isRead: false
+      });
+
+      res.json({ success: true, message: "Tuition request cancelled successfully.", tuition: mockT });
+    } catch (e: any) {
+      console.error("Cancel tuition error:", e);
+      res.status(500).json({ error: e.message || "Failed to cancel tuition" });
+    }
+  });
+
+  // 3c. Guardian Demo Outcome Decision (Hire vs Try Another Shortlist)
+  app.post("/api/guardian/demos/:id/decision", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { decision, rating, feedback } = req.body; // 'HIRE' | 'REPLACE' | 'CANCEL'
+      
+      const demo = mockDemos.find((d: any) => d.id === id || d.tuitionId === id || d.jobCode === id);
+      if (!demo) {
+        return res.status(404).json({ error: "Demo class record not found." });
+      }
+
+      demo.guardianDecision = decision;
+      demo.guardianRating = rating || 5;
+      demo.guardianFeedback = feedback || '';
+      demo.updatedAt = new Date().toISOString();
+
+      const tuitionId = demo.tuitionId || demo.jobCode;
+      const mockT = mockTuitions.find((m: any) => m.id === tuitionId || m.jobCode === tuitionId || m.realId === tuitionId);
+
+      if (decision === 'HIRE') {
+        demo.status = 'Winner Selected';
+        demo.result = 'Successful';
+
+        if (mockT) {
+          mockT.status = 'CONFIRMED';
+          mockT.assignedTutorId = demo.tutorId;
+          mockT.tutorName = demo.tutorName || mockT.tutorName;
+          mockT.confirmedStartDate = new Date().toISOString().split('T')[0];
+          mockT.updatedAt = new Date().toISOString();
+
+          // Create pending media commission payment record
+          const salaryNum = parseInt(mockT.salary?.toString().replace(/[^0-9]/g, '') || '5000') || 5000;
+          const commissionAmount = Math.round(salaryNum * 0.5); // 50% first-month media fee
+          mockPayments.unshift({
+            id: 'PAY-' + Date.now(),
+            tuitionId: mockT.id,
+            tutorId: demo.tutorId,
+            amount: commissionAmount,
+            method: 'bKash / Nagad',
+            status: 'Pending',
+            type: 'Platform Media Fee (1st Month)',
+            date: new Date().toISOString().split('T')[0],
+            startDate: mockT.confirmedStartDate
+          });
+
+          // Notify admin
+          mockTeacherAlerts.unshift({
+            id: 'ALERT-' + Date.now(),
+            jobId: mockT.id,
+            jobTitle: mockT.title || 'Tuition ' + mockT.id,
+            tutorId: demo.tutorId,
+            tutorName: demo.tutorName || 'Selected Tutor',
+            type: 'GUARDIAN_CONFIRMED_HIRE',
+            message: `🎉 Guardian confirmed hire for ${mockT.title}! Tutor ${demo.tutorName} assigned. Media Commission of ৳${commissionAmount} is now pending.`,
+            timestamp: new Date().toISOString(),
+            isRead: false
+          });
+        }
+
+        return res.json({ 
+          success: true, 
+          decision: 'HIRE',
+          message: "Congratulations! Tutor has been officially confirmed and hired. Our coordinator will finalize arrangements.",
+          demo,
+          tuition: mockT 
+        });
+      } else if (decision === 'REPLACE') {
+        demo.status = 'Replacement Requested';
+        demo.result = 'Unsuccessful';
+
+        if (mockT) {
+          mockT.status = 'SHORTLISTED';
+          mockT.updatedAt = new Date().toISOString();
+        }
+
+        mockTeacherAlerts.unshift({
+          id: 'ALERT-' + Date.now(),
+          jobId: tuitionId,
+          jobTitle: mockT?.title || 'Tuition ' + tuitionId,
+          tutorId: demo.tutorId,
+          tutorName: demo.tutorName || 'Tutor',
+          type: 'GUARDIAN_REQUESTED_REPLACEMENT',
+          message: `Guardian requested another tutor for ${mockT?.title || tuitionId} after demo. Feedback: "${feedback || 'No specific notes'}".`,
+          timestamp: new Date().toISOString(),
+          isRead: false
+        });
+
+        return res.json({ 
+          success: true, 
+          decision: 'REPLACE',
+          message: "Feedback received. You can now select another tutor from your shortlist or wait for admin recommendations.",
+          demo,
+          tuition: mockT 
+        });
+      } else {
+        demo.status = 'Cancelled';
+        if (mockT) {
+          mockT.status = 'CANCELLED';
+          mockT.cancelReason = feedback || 'Demo rejected by parent';
+          mockT.cancelledBy = 'guardian';
+        }
+        return res.json({ success: true, decision: 'CANCEL', demo, tuition: mockT });
+      }
+    } catch (e: any) {
+      console.error("Demo decision error:", e);
+      res.status(500).json({ error: e.message || "Failed to process decision" });
+    }
+  });
+
+  // 4. Guardian Demos List
+  app.get("/api/guardian/demos", async (req, res) => {
+    try {
+      let userPhone = (req.query.phone as string) || '01715998756';
+      const guardianDemos = mockDemos.filter((d: any) => 
+        (d.guardianPhone && (d.guardianPhone === userPhone || d.guardianPhone === '01715998756')) ||
+        d.id === 'D-801' || d.tuitionId === 'T-1024'
+      );
+      res.json(guardianDemos);
+    } catch (e) {
+      res.json([]);
+    }
+  });
+
+  // 5. Standard Bangladesh Areas Hierarchy
+  app.get("/api/areas", (_req, res) => {
+    res.json(BD_AREAS);
   });
 
   app.use("/api/admin", authMiddleware, requireAdmin);
@@ -2062,6 +3358,10 @@ async function startServer() {
 
       // 3. Create demo record
       const demoId = 'DEMO-' + Date.now();
+      const formattedDate = new Date(demoDate);
+      const dateStr = formattedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const timeStr = formattedDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
       const newDemo = {
         id: demoId,
         tuitionId: mockT?.id || id,
@@ -2072,9 +3372,11 @@ async function startServer() {
         guardianName: guardianName,
         guardianPhone: guardianPhone,
         location: location,
-        date: demoDate,
+        date: dateStr,
+        time: timeStr,
         scheduledDate: demoDate,
         notes: notes || '',
+        meetingLink: `https://meet.google.com/tl-${Math.floor(100+Math.random()*900)}-demo`,
         status: 'Scheduled',
         createdAt: new Date().toISOString()
       };
@@ -2088,6 +3390,7 @@ async function startServer() {
         mockT.demoTutor = tutorCode;
         mockT.demoTutorName = tutorName;
         mockT.demoTutorPhone = tutorPhone;
+        mockT.guardianDemoScheduled = true;
         mockT.updatedAt = new Date().toISOString();
       }
 
@@ -2109,7 +3412,7 @@ async function startServer() {
         tutorEmail: tutorEmail,
         type: 'DEMO_SCHEDULED',
         title: '🎉 Demo Class Assigned!',
-        message: `Admin has scheduled a trial/demo class for "${tuitionTitle}" on ${new Date(demoDate).toLocaleString()}. Guardian: ${guardianName} (${guardianPhone}). Address: ${location}.`,
+        message: `Admin has scheduled a trial/demo class for "${tuitionTitle}" on ${dateStr} at ${timeStr}. Guardian: ${guardianName} (${guardianPhone}). Address: ${location}.`,
         tuitionId: mockT?.id || id,
         jobCode: mockT?.jobCode || id,
         scheduledDate: demoDate,
@@ -2120,6 +3423,19 @@ async function startServer() {
         createdAt: new Date().toISOString()
       };
       mockNotifications.unshift(newNotif);
+
+      // 6. Send Notification to Guardian
+      const guardianNotif = {
+        id: 'NOTIF-G-' + Date.now(),
+        type: 'DEMO_ASSIGNED_GUARDIAN',
+        guardianPhone: guardianPhone,
+        title: '✨ Demo Class Assigned by Admin!',
+        message: `Admin has assigned tutor ${tutorName} for your trial/demo class on ${dateStr} at ${timeStr}.`,
+        tuitionId: mockT?.id || id,
+        createdAt: new Date().toISOString(),
+        isRead: false
+      };
+      mockNotifications.unshift(guardianNotif);
 
       res.json({ success: true, demo: newDemo, notification: newNotif });
     } catch (e: any) {
@@ -2261,7 +3577,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  app.listen(Number(PORT), "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
   });
 }

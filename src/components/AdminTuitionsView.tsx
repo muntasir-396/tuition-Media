@@ -7,7 +7,7 @@ import { formatTimeAgo } from "../lib/dateUtils";
 import { 
   CheckCircle, Edit, MapPin, DollarSign, Activity, 
   RefreshCw, XCircle, Users, Calendar, Search, 
-  CreditCard, Archive, Clock, Eye, Bell
+  CreditCard, Archive, Clock, Eye, Bell, Sparkles
 } from 'lucide-react';
 
 
@@ -477,6 +477,11 @@ export const AdminTuitionsView: React.FC = () => {
                 }`}>
                   <Users className="w-3.5 h-3.5" /> {t.applications || 0} Applicant{(t.applications || 0) === 1 ? '' : 's'}
                 </span>
+                {(t.status === 'GUARDIAN_SELECTED' || t.guardianSelectedTutorId) && (
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1 animate-pulse">
+                    <Sparkles className="w-3.5 h-3.5 text-purple-600" /> Demo Requested by Guardian
+                  </span>
+                )}
                 {t.status === 'DEMO_SCHEDULED' && (
                   <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5" /> Demo Scheduled
