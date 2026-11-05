@@ -5,7 +5,7 @@ A modern, full-stack tuition media and tutor-matching platform tailored for Bang
 Live Landing page- https://tuition-media-6agv.onrender.com/?tab=home
 Live Admin -https://tuition-media-6agv.onrender.com/admin?tab=admin-dashboard
 Admin ScreenShot:
-![alt text](image_2026-11-06_at_03.04.40_AM.png) ![alt text](image_2026-11-06_at_03.04.47_AM.png) ![alt text](<Screenshot 2026-11-05 at 11.03.39 PM.png>) ![alt text](<Screenshot 2026-11-05 at 11.03.56 PM.png>)
+![alt text](<Screenshot 2026-11-05 at 11.03.24 PM-1.png>) ![alt text](<Screenshot 2026-11-05 at 11.03.33 PM-1.png>) ![alt text](<Screenshot 2026-11-05 at 11.03.39 PM-1.png>) ![alt text](<Screenshot 2026-11-05 at 11.03.56 PM-1.png>)
 
 
 ---
