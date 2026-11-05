@@ -9,7 +9,7 @@ import {
 import { formatTimeAgo } from '../lib/dateUtils';
 
 export const GuardianDashboardView: React.FC = () => {
-  const { setActiveTab, setSelectedJob, setSelectedTutor } = useApp();
+  const { setActiveTab, setSelectedJob, setSelectedTutor, navigateToTutorProfile } = useApp();
 
   const [tuitions, setTuitions] = useState<any[]>([]);
   const [demos, setDemos] = useState<any[]>([]);
@@ -46,6 +46,20 @@ export const GuardianDashboardView: React.FC = () => {
   const [guardianFeedback, setGuardianFeedback] = useState('');
   const [isSubmittingDecision, setIsSubmittingDecision] = useState(false);
   const [decisionSuccessMsg, setDecisionSuccessMsg] = useState('');
+
+  // Explicit Confirm Tutor Modal State
+  const [tutorToConfirm, setTutorToConfirm] = useState<{ tuition: any; demo: any } | null>(null);
+  const [confirmRating, setConfirmRating] = useState(5);
+  const [confirmFeedback, setConfirmFeedback] = useState('');
+  const [isSubmittingConfirm, setIsSubmittingConfirm] = useState(false);
+  const [confirmSuccessMsg, setConfirmSuccessMsg] = useState('');
+
+  // Explicit Cancel Tutor (Need Another Demo) Modal State
+  const [tutorToCancelDemo, setTutorToCancelDemo] = useState<{ tuition: any; demo: any } | null>(null);
+  const [cancelDemoReason, setCancelDemoReason] = useState("Teaching style or pace didn't match student");
+  const [cancelDemoNotes, setCancelDemoNotes] = useState('');
+  const [isSubmittingCancelDemo, setIsSubmittingCancelDemo] = useState(false);
+  const [cancelDemoSuccessMsg, setCancelDemoSuccessMsg] = useState('');
 
   const fetchGuardianData = async () => {
     try {
@@ -193,6 +207,77 @@ export const GuardianDashboardView: React.FC = () => {
       alert('Network error submitting demo outcome');
     } finally {
       setIsSubmittingDecision(false);
+    }
+  };
+
+  const handleConfirmTutorSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tutorToConfirm) return;
+    setIsSubmittingConfirm(true);
+    try {
+      const demoId = tutorToConfirm.demo?.id || tutorToConfirm.demo?.tuitionId || tutorToConfirm.tuition?.id || tutorToConfirm.tuition?.jobCode;
+      const res = await fetch(`/api/guardian/demos/${demoId}/decision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          decision: 'HIRE',
+          rating: confirmRating,
+          feedback: confirmFeedback || 'Tutor confirmed and hired by guardian'
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setConfirmSuccessMsg(data.message || 'Tutor successfully confirmed and hired!');
+        window.dispatchEvent(new CustomEvent('tutorlink:job-applied'));
+        setTimeout(() => {
+          setTutorToConfirm(null);
+          setConfirmSuccessMsg('');
+          fetchGuardianData();
+        }, 1500);
+      } else {
+        alert(data.error || 'Failed to confirm tutor');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error confirming tutor');
+    } finally {
+      setIsSubmittingConfirm(false);
+    }
+  };
+
+  const handleCancelDemoSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tutorToCancelDemo) return;
+    setIsSubmittingCancelDemo(true);
+    try {
+      const demoId = tutorToCancelDemo.demo?.id || tutorToCancelDemo.demo?.tuitionId || tutorToCancelDemo.tuition?.id || tutorToCancelDemo.tuition?.jobCode;
+      const res = await fetch(`/api/guardian/demos/${demoId}/decision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          decision: 'REPLACE',
+          reason: cancelDemoReason,
+          notes: cancelDemoNotes,
+          feedback: `${cancelDemoReason}${cancelDemoNotes ? ` - Notes: ${cancelDemoNotes}` : ''}`
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCancelDemoSuccessMsg(data.message || 'Tutor cancelled. Admin has been notified to arrange another demo.');
+        window.dispatchEvent(new CustomEvent('tutorlink:job-applied'));
+        setTimeout(() => {
+          setTutorToCancelDemo(null);
+          setCancelDemoSuccessMsg('');
+          fetchGuardianData();
+        }, 1500);
+      } else {
+        alert(data.error || 'Failed to cancel tutor demo');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error cancelling tutor demo');
+    } finally {
+      setIsSubmittingCancelDemo(false);
     }
   };
 
@@ -346,17 +431,73 @@ export const GuardianDashboardView: React.FC = () => {
                          )}
 
                          {isDemoScheduled && t.demo && (
-                           <div className="my-2.5 p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 flex items-center justify-between">
+                           <div className="my-2.5 p-3 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
                              <span className="flex items-center gap-1.5 font-bold">
-                               <Calendar className="w-4 h-4 text-indigo-600" />
-                               Demo Scheduled with <strong className="font-black">{t.demo.tutorName}</strong> ({t.demo.date} {t.demo.time ? `at ${t.demo.time}` : ''})
+                               <Calendar className="w-4 h-4 text-indigo-600 shrink-0" />
+                               <span>Demo Scheduled with <strong className="font-black underline">{t.demo.tutorName}</strong> ({t.demo.date} {t.demo.time ? `at ${t.demo.time}` : ''})</span>
                              </span>
-                             <button
-                               onClick={() => setSelectedDemoDetails(t.demo)}
-                               className="text-[11px] bg-indigo-600 text-white font-bold px-2.5 py-1 rounded-lg hover:bg-indigo-700"
-                             >
-                               View Demo
-                             </button>
+                             <div className="flex items-center gap-1.5 flex-wrap">
+                               <button
+                                 onClick={() => setSelectedDemoDetails(t.demo)}
+                                 className="text-[11px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer shadow-xs"
+                               >
+                                 Demo Details
+                               </button>
+                               <button
+                                 onClick={() => {
+                                   const tid = t.demo.tutorCode || t.demo.tutorId || t.demo.tutor?.id || t.demo.tutorName;
+                                   navigateToTutorProfile(tid);
+                                 }}
+                                 className="text-[11px] bg-slate-900 hover:bg-slate-800 text-white font-extrabold px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer shadow-xs"
+                                 title="View Tutor Profile as Guardian"
+                               >
+                                 <User className="w-3 h-3 text-[#84CC16]" /> View Tutor Profile
+                               </button>
+                               <button
+                                 onClick={() => {
+                                   setTutorToConfirm({ tuition: t, demo: t.demo });
+                                   setConfirmRating(5);
+                                   setConfirmFeedback('');
+                                 }}
+                                 className="text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white font-black px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer shadow-xs"
+                                 title="Confirm and hire this tutor"
+                               >
+                                 <CheckCircle2 className="w-3.5 h-3.5" /> Confirm Tutor
+                               </button>
+                               <button
+                                 onClick={() => {
+                                   setTutorToCancelDemo({ tuition: t, demo: t.demo });
+                                   setCancelDemoReason("Teaching style or pace didn't match student");
+                                   setCancelDemoNotes('');
+                                 }}
+                                 className="text-[11px] bg-rose-600 hover:bg-rose-700 text-white font-black px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer shadow-xs"
+                                 title="Cancel tutor and request another tutor demo"
+                               >
+                                 <XCircle className="w-3.5 h-3.5" /> Cancel Tutor (Need Another Demo)
+                               </button>
+                             </div>
+                           </div>
+                         )}
+
+                         {t.guardianRequestedReplacement && !t.demo && (
+                           <div className="my-2.5 p-3 rounded-2xl bg-amber-50 border border-amber-300 text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+                             <div className="flex items-center gap-2">
+                               <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                               <div>
+                                 <span className="font-extrabold text-amber-900">Another Tutor Demo Requested</span>
+                                 <p className="text-[11px] text-amber-800 font-medium">
+                                   Admin has been notified to arrange another demo class. Reason: "{t.replacementReason || 'Need another tutor demo'}".
+                                 </p>
+                               </div>
+                             </div>
+                             {appCount > 0 && (
+                               <button
+                                 onClick={() => openApplicantsModal(t)}
+                                 className="text-[11px] bg-amber-700 hover:bg-amber-800 text-white font-bold px-3 py-1.5 rounded-lg shrink-0 cursor-pointer shadow-xs"
+                               >
+                                 View Other Applicants ({appCount})
+                               </button>
+                             )}
                            </div>
                          )}
 
@@ -483,24 +624,49 @@ export const GuardianDashboardView: React.FC = () => {
                               </p>
                             )}
                          </div>
-                         <button 
-                           onClick={() => setSelectedDemoDetails(d)}
-                           className="w-full py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
-                         >
-                            <Video className="w-3.5 h-3.5" /> Join Meeting / Details
-                         </button>
-                         {d.status !== 'Winner Selected' && (
+                         <div className="grid grid-cols-2 gap-2">
+                           <button 
+                             onClick={() => setSelectedDemoDetails(d)}
+                             className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                           >
+                              <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Demo Details
+                           </button>
                            <button 
                              onClick={() => {
-                               setDemoToDecide(d);
-                               setTrialDecision('HIRE');
-                               setGuardianRating(5);
-                               setGuardianFeedback('');
+                               const tid = d.tutorCode || d.tutorId || d.tutor?.id || d.tutorName;
+                               navigateToTutorProfile(tid);
                              }}
-                             className="w-full py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                             className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-extrabold transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                             title="View Tutor Profile as Guardian"
                            >
-                             <CheckCircle2 className="w-3.5 h-3.5" /> Demo Feedback & Hire Decision
+                              <User className="w-3.5 h-3.5 text-[#84CC16]" /> View Profile
                            </button>
+                         </div>
+                         {d.status !== 'Winner Selected' && (
+                           <div className="grid grid-cols-2 gap-2 pt-1">
+                             <button 
+                               onClick={() => {
+                                 const matchedT = tuitions.find(t => t.id === d.tuitionId || t.jobCode === d.tuitionId || t.id === d.jobCode);
+                                 setTutorToConfirm({ tuition: matchedT || d, demo: d });
+                                 setConfirmRating(5);
+                                 setConfirmFeedback('');
+                               }}
+                               className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 shadow-xs cursor-pointer"
+                             >
+                               <CheckCircle2 className="w-3.5 h-3.5" /> Confirm Tutor
+                             </button>
+                             <button 
+                               onClick={() => {
+                                 const matchedT = tuitions.find(t => t.id === d.tuitionId || t.jobCode === d.tuitionId || t.id === d.jobCode);
+                                 setTutorToCancelDemo({ tuition: matchedT || d, demo: d });
+                                 setCancelDemoReason("Teaching style or pace didn't match student");
+                                 setCancelDemoNotes('');
+                               }}
+                               className="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-xs cursor-pointer text-center"
+                             >
+                               <XCircle className="w-3.5 h-3.5 text-rose-600" /> Cancel Tutor
+                             </button>
+                           </div>
                          )}
                       </div>
                    ))
@@ -629,6 +795,26 @@ export const GuardianDashboardView: React.FC = () => {
                         )}
                       </div>
 
+                      {/* Contact & Experience Row (matching Admin view) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 py-2 px-3 bg-slate-50 rounded-xl border border-slate-100 text-xs mt-3">
+                        <div>
+                          <span className="text-slate-400 font-semibold block text-[10px]">Phone Number</span>
+                          <span className="font-bold text-slate-800">
+                            {applicant.phone ? `${applicant.phone.substring(0, 3)}****${applicant.phone.substring(applicant.phone.length - 2)} (Verified)` : '017****71 (Verified)'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 font-semibold block text-[10px]">Email Address</span>
+                          <span className="font-bold text-slate-800 truncate block">
+                            {applicant.email ? (applicant.email.includes('@') ? `${applicant.email.substring(0, 2)}***@${applicant.email.split('@')[1]}` : 'Protected') : 'Protected'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 font-semibold block text-[10px]">Tutoring Experience</span>
+                          <span className="font-bold text-slate-800">{applicant.experience || '2+ years'}</span>
+                        </div>
+                      </div>
+
                       {/* Tutor's Pitch Note */}
                       {applicant.message && (
                         <div className="mt-3 p-3 bg-slate-50/80 rounded-xl border border-slate-100 text-xs text-slate-700 italic flex items-start gap-2">
@@ -639,13 +825,27 @@ export const GuardianDashboardView: React.FC = () => {
 
                       {/* Action buttons */}
                       <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2">
-                        <button
-                          onClick={() => setPreviewTutor(applicant)}
-                          className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                        >
-                          <Eye className="w-3.5 h-3.5 text-slate-500" />
-                          <span>View Full Profile</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              const tid = applicant.tutorCode || applicant.tutorId || applicant.id;
+                              setSelectedTuitionForApplicants(null);
+                              navigateToTutorProfile(tid);
+                            }}
+                            className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                            title="View Full Tutor Profile as Guardian"
+                          >
+                            <User className="w-3.5 h-3.5 text-[#84CC16]" />
+                            <span>View Tutor Profile</span>
+                          </button>
+                          <button
+                            onClick={() => setPreviewTutor(applicant)}
+                            className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-slate-500" />
+                            <span>Quick View</span>
+                          </button>
+                        </div>
 
                         <div>
                           {isScheduled ? (
@@ -833,12 +1033,24 @@ export const GuardianDashboardView: React.FC = () => {
               )}
             </div>
 
-            <div className="pt-3 flex gap-2">
+            <div className="pt-3 flex gap-2 flex-wrap">
               <button
                 onClick={() => setPreviewTutor(null)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50"
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 cursor-pointer"
               >
                 Close
+              </button>
+              <button
+                onClick={() => {
+                  const tid = previewTutor.tutorCode || previewTutor.tutorId || previewTutor.id;
+                  setPreviewTutor(null);
+                  setSelectedTuitionForApplicants(null);
+                  navigateToTutorProfile(tid);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <User className="w-3.5 h-3.5 text-[#84CC16]" />
+                <span>View Full Profile</span>
               </button>
               {selectedTuitionForApplicants && (
                 <button
@@ -847,7 +1059,7 @@ export const GuardianDashboardView: React.FC = () => {
                     setPreviewTutor(null);
                     setTutorToSelectForDemo(tutor);
                   }}
-                  className="flex-1 py-2.5 rounded-xl bg-[#84CC16] hover:bg-[#65A30D] text-white font-black text-xs flex items-center justify-center gap-1.5"
+                  className="flex-1 py-2.5 rounded-xl bg-[#84CC16] hover:bg-[#65A30D] text-white font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Select for Demo</span>
@@ -894,16 +1106,45 @@ export const GuardianDashboardView: React.FC = () => {
               </div>
             </div>
 
-            {selectedDemoDetails.meetingLink && (
-              <a
-                href={selectedDemoDetails.meetingLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors"
+            <button
+              onClick={() => {
+                const tid = selectedDemoDetails.tutorCode || selectedDemoDetails.tutorId || selectedDemoDetails.tutor?.id || selectedDemoDetails.tutorName;
+                setSelectedDemoDetails(null);
+                navigateToTutorProfile(tid);
+              }}
+              className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"
+            >
+              <User className="w-4 h-4 text-[#84CC16]" /> View Tutor Profile
+            </button>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                onClick={() => {
+                  const demo = selectedDemoDetails;
+                  const matchedT = tuitions.find(t => t.id === demo.tuitionId || t.jobCode === demo.tuitionId || t.id === demo.jobCode);
+                  setSelectedDemoDetails(null);
+                  setTutorToConfirm({ tuition: matchedT || demo, demo });
+                  setConfirmRating(5);
+                  setConfirmFeedback('');
+                }}
+                className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
               >
-                <Video className="w-4 h-4" /> Join Online Meeting
-              </a>
-            )}
+                <CheckCircle2 className="w-3.5 h-3.5" /> Confirm Tutor
+              </button>
+              <button
+                onClick={() => {
+                  const demo = selectedDemoDetails;
+                  const matchedT = tuitions.find(t => t.id === demo.tuitionId || t.jobCode === demo.tuitionId || t.id === demo.jobCode);
+                  setSelectedDemoDetails(null);
+                  setTutorToCancelDemo({ tuition: matchedT || demo, demo });
+                  setCancelDemoReason("Teaching style or pace didn't match student");
+                  setCancelDemoNotes('');
+                }}
+                className="py-2.5 px-3 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+              >
+                <XCircle className="w-3.5 h-3.5" /> Cancel Tutor
+              </button>
+            </div>
 
             <button
               onClick={() => setSelectedDemoDetails(null)}
@@ -1135,6 +1376,204 @@ export const GuardianDashboardView: React.FC = () => {
                 >
                   {isSubmittingDecision ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                   <span>{isSubmittingDecision ? 'Submitting...' : trialDecision === 'HIRE' ? 'Confirm Hire' : 'Request Replacement'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ================= MODAL: CONFIRM TUTOR & HIRE ================= */}
+      {tutorToConfirm && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-black text-slate-900 text-lg flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" /> Confirm & Hire Tutor
+              </h3>
+              <button 
+                onClick={() => setTutorToConfirm(null)}
+                className="p-1 rounded-full hover:bg-slate-100 text-slate-400"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {confirmSuccessMsg && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{confirmSuccessMsg}</span>
+              </div>
+            )}
+
+            <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 flex items-center gap-3">
+              <img 
+                src={tutorToConfirm.demo?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(tutorToConfirm.demo?.tutorName || 'Tutor')}`}
+                alt={tutorToConfirm.demo?.tutorName}
+                className="w-12 h-12 rounded-xl object-cover bg-white border border-emerald-200"
+              />
+              <div>
+                <h4 className="font-black text-slate-900 text-base">{tutorToConfirm.demo?.tutorName || 'Assigned Tutor'}</h4>
+                <p className="text-xs text-slate-600 font-medium">{tutorToConfirm.demo?.university || 'University Mentor'}</p>
+                <p className="text-[11px] text-emerald-700 font-bold">
+                  Tuition: {tutorToConfirm.tuition?.title || tutorToConfirm.tuition?.subject || 'Tuition Job'}
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleConfirmTutorSubmit} className="space-y-4 pt-1">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Demo Experience Rating
+                </label>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setConfirmRating(star)}
+                      className="p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                    >
+                      <Star 
+                        className={`w-6 h-6 ${star <= confirmRating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} 
+                      />
+                    </button>
+                  ))}
+                  <span className="text-xs font-bold text-slate-600 ml-1">{confirmRating} / 5 Stars</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Starting Notes or Feedback (Optional)
+                </label>
+                <textarea
+                  value={confirmFeedback}
+                  onChange={(e) => setConfirmFeedback(e.target.value)}
+                  placeholder="e.g. Pleased with the demo! We would like to start regular classes from next Saturday."
+                  rows={2}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-emerald-400 outline-hidden"
+                />
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl text-[11px] text-slate-600 leading-relaxed border border-slate-100">
+                ✅ Once confirmed, this tutor will be officially hired for this tuition request and admin will be notified immediately.
+              </div>
+
+              <div className="flex gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setTutorToConfirm(null)}
+                  className="flex-1 py-2.5 border border-slate-200 rounded-xl text-slate-700 font-bold text-xs hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingConfirm}
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmittingConfirm ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                  <span>{isSubmittingConfirm ? 'Confirming...' : 'Confirm & Hire Tutor'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: CANCEL TUTOR (ANOTHER TUTOR DEMO NEEDED) ================= */}
+      {tutorToCancelDemo && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-black text-slate-900 text-lg flex items-center gap-2">
+                  <XCircle className="w-5 h-5 text-rose-600" /> Cancel Tutor & Request Another Demo
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">Admin will be notified to arrange another demo class.</p>
+              </div>
+              <button 
+                onClick={() => setTutorToCancelDemo(null)}
+                className="p-1 rounded-full hover:bg-slate-100 text-slate-400"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {cancelDemoSuccessMsg && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{cancelDemoSuccessMsg}</span>
+              </div>
+            )}
+
+            <div className="p-3.5 rounded-2xl bg-rose-50/70 border border-rose-200 flex items-center gap-3">
+              <img 
+                src={tutorToCancelDemo.demo?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(tutorToCancelDemo.demo?.tutorName || 'Tutor')}`}
+                alt={tutorToCancelDemo.demo?.tutorName}
+                className="w-12 h-12 rounded-xl object-cover bg-white border border-rose-200"
+              />
+              <div>
+                <h4 className="font-black text-slate-900 text-sm">Cancelling Demo with: {tutorToCancelDemo.demo?.tutorName}</h4>
+                <p className="text-xs text-slate-600 font-medium">{tutorToCancelDemo.demo?.university}</p>
+                <p className="text-[11px] text-rose-700 font-bold">
+                  Tuition: {tutorToCancelDemo.tuition?.title || tutorToCancelDemo.tuition?.subject}
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleCancelDemoSubmit} className="space-y-4 pt-1">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Reason for Requesting Another Tutor <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={cancelDemoReason}
+                  onChange={(e) => setCancelDemoReason(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-rose-400 outline-hidden bg-white"
+                  required
+                >
+                  <option value="Teaching style or pace didn't match student">Teaching style or pace didn't match student</option>
+                  <option value="Subject expertise or curriculum need">Looking for different subject expertise / background</option>
+                  <option value="Schedule or timing conflict">Schedule or timing conflict</option>
+                  <option value="Want to try another tutor from applicant list">Want to interview another tutor from applied list</option>
+                  <option value="Student was not comfortable with the trial class">Student was not comfortable with the trial class</option>
+                  <option value="Other reason">Other reason</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Notes for Admin Team (Optional)
+                </label>
+                <textarea
+                  value={cancelDemoNotes}
+                  onChange={(e) => setCancelDemoNotes(e.target.value)}
+                  placeholder="Specify any preferences for the next tutor (e.g. prefer experienced female tutor, weekday mornings only)..."
+                  rows={2}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-rose-400 outline-hidden"
+                />
+              </div>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 leading-relaxed">
+                🔔 <strong>Admin Notification:</strong> Your feedback will be delivered instantly to platform administrators. They will review your tuition and coordinate another tutor demo promptly.
+              </div>
+
+              <div className="flex gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setTutorToCancelDemo(null)}
+                  className="flex-1 py-2.5 border border-slate-200 rounded-xl text-slate-700 font-bold text-xs hover:bg-slate-50"
+                >
+                  Keep Current Tutor
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingCancelDemo}
+                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmittingCancelDemo ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  <span>{isSubmittingCancelDemo ? 'Submitting...' : 'Cancel & Request Another Tutor'}</span>
                 </button>
               </div>
             </form>

@@ -105,7 +105,7 @@ export const TutorProfileView: React.FC = () => {
     currentUser?.id === tutor.id
   );
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super-admin';
-  const isParent = currentUser?.role === 'parent' || viewAsParent;
+  const isParent = currentUser?.role === 'parent' || currentUser?.role === 'guardian' || viewAsParent;
   const isBlocked = tutor.status === 'blocked' || tutor.status === 'suspended';
 
   const [myDemos, setMyDemos] = useState<any[]>([]);
@@ -172,6 +172,23 @@ export const TutorProfileView: React.FC = () => {
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Return to Applications</span>
+          </button>
+        </div>
+      )}
+
+      {/* Top Guardian Dashboard Return Banner */}
+      {(isParent || currentUser?.role === 'parent' || currentUser?.role === 'guardian') && !isAdmin && !isOwner && (
+        <div className="flex items-center justify-between p-3.5 bg-slate-900 text-white rounded-2xl shadow-sm border border-slate-800">
+          <div className="flex items-center gap-2">
+            <User className="w-5 h-5 text-[#84CC16]" />
+            <span className="text-xs font-bold">Guardian View • Tutor Profile ({tutor.name})</span>
+          </div>
+          <button
+            onClick={() => setActiveTab('guardian-dashboard')}
+            className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 border border-slate-700 flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Parent Dashboard</span>
           </button>
         </div>
       )}

@@ -7,7 +7,7 @@ import { formatTimeAgo } from "../lib/dateUtils";
 import { 
   CheckCircle, Edit, MapPin, DollarSign, Activity, 
   RefreshCw, XCircle, Users, Calendar, Search, 
-  CreditCard, Archive, Clock, Eye, Bell, Sparkles
+  CreditCard, Archive, Clock, Eye, Bell, Sparkles, AlertTriangle
 } from 'lucide-react';
 
 
@@ -389,42 +389,66 @@ export const AdminTuitionsView: React.FC = () => {
 
           {/* Alert cards list */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-            {teacherAlerts.slice(0, 4).map((alert) => (
-              <div
-                key={alert.id}
-                className="p-3 bg-white/95 rounded-xl border border-indigo-100 flex items-center justify-between gap-3 shadow-2xs hover:border-indigo-300 transition-all"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-extrabold text-xs text-slate-900 truncate">{alert.tutorName}</span>
-                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
-                      {alert.jobId}
+            {teacherAlerts.slice(0, 6).map((alert) => {
+              const isReplacement = alert.type === 'GUARDIAN_REQUESTED_REPLACEMENT';
+              const isHire = alert.type === 'GUARDIAN_CONFIRMED_HIRE';
+
+              return (
+                <div
+                  key={alert.id}
+                  className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 shadow-2xs transition-all ${
+                    isReplacement 
+                      ? 'bg-amber-50/90 border-amber-300 hover:border-amber-400' 
+                      : isHire 
+                      ? 'bg-emerald-50/90 border-emerald-300 hover:border-emerald-400' 
+                      : 'bg-white/95 border-indigo-100 hover:border-indigo-300'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-black text-xs text-slate-900 truncate">{alert.tutorName}</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
+                        {alert.jobId}
+                      </span>
+                      {isReplacement && (
+                        <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 border border-rose-200 uppercase">
+                          New Demo Needed
+                        </span>
+                      )}
+                      {isHire && (
+                        <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-200 uppercase">
+                          Hired by Parent
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-600 line-clamp-2 mt-1 font-medium">
+                      {alert.message || `${alert.tutorUniversity || ''} • ${alert.jobTitle}`}
+                    </p>
+                    <span className="text-[10px] text-slate-400 block mt-1">
+                      {new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(alert.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500 truncate mt-0.5">
-                    {alert.tutorUniversity} • {alert.jobTitle}
-                  </p>
-                  <span className="text-[10px] text-slate-400">
-                    {new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => viewDetails(alert.jobId)}
+                      className={`px-3 py-1.5 rounded-lg text-white font-bold text-xs transition-colors cursor-pointer shadow-xs ${
+                        isReplacement ? 'bg-amber-600 hover:bg-amber-700' : isHire ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700'
+                      }`}
+                      title="View Tuition Details"
+                    >
+                      View Tuition
+                    </button>
+                    <button
+                      onClick={() => handleDismissAlert(alert.id)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                      title="Dismiss Alert"
+                    >
+                      <XCircle className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    onClick={() => viewDetails(alert.jobId)}
-                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors cursor-pointer"
-                  >
-                    Review
-                  </button>
-                  <button
-                    onClick={() => handleDismissAlert(alert.id)}
-                    className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
-                    title="Dismiss Alert"
-                  >
-                    <XCircle className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -477,6 +501,16 @@ export const AdminTuitionsView: React.FC = () => {
                 }`}>
                   <Users className="w-3.5 h-3.5" /> {t.applications || 0} Applicant{(t.applications || 0) === 1 ? '' : 's'}
                 </span>
+                {(t.guardianRequestedReplacement || t.guardianDecision === 'REPLACE') && (
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1 animate-pulse">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> Another Demo Needed (Guardian Requested)
+                  </span>
+                )}
+                {(t.guardianDecision === 'HIRE' || (t.status === 'CONFIRMED' && t.guardianRating)) && (
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Guardian Confirmed & Hired
+                  </span>
+                )}
                 {(t.status === 'GUARDIAN_SELECTED' || t.guardianSelectedTutorId) && (
                   <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1 animate-pulse">
                     <Sparkles className="w-3.5 h-3.5 text-purple-600" /> Demo Requested by Guardian

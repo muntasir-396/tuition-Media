@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { AdminTuitionEditModal } from "./tuition/AdminTuitionEditModal";
 import { formatTimeAgo } from "../lib/dateUtils";
 
-import { MapPin, DollarSign, Activity, CheckCircle, XCircle, Users, BookOpen, Clock, Calendar, MessageSquare, ArrowLeft, Edit, User, GraduationCap, Phone, Mail, Award, CheckCircle2, Eye, ShieldCheck, Briefcase, BookMarked, Ban } from 'lucide-react';
+import { MapPin, DollarSign, Activity, CheckCircle, XCircle, Users, BookOpen, Clock, Calendar, MessageSquare, ArrowLeft, Edit, User, GraduationCap, Phone, Mail, Award, CheckCircle2, Eye, ShieldCheck, Briefcase, BookMarked, Ban, AlertTriangle } from 'lucide-react';
 
 export const AdminTuitionDetailsView: React.FC = () => {
   const { setActiveTab, adminSelectedTuitionId, navigateToTutorProfile, blockTutor } = useApp();
@@ -361,6 +361,95 @@ export const AdminTuitionDetailsView: React.FC = () => {
         {/* Left Column (Existing Content style) */}
         <div className="lg:col-span-2 space-y-6">
 
+          {/* Guardian Requested Replacement Tutor Demo Banner (when activeDemo is unlinked/null) */}
+          {tuition?.guardianRequestedReplacement && !activeDemo && (
+            <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 border-2 border-amber-300 rounded-2xl p-5 shadow-sm space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-200/80 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs shrink-0 font-black">
+                    <AlertTriangle className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-black text-slate-900 text-base">Parent Requested Another Tutor Demo!</h4>
+                      <span className="px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-950 font-extrabold text-[10px] uppercase tracking-wide animate-pulse">
+                        Action Required: Assign New Demo
+                      </span>
+                    </div>
+                    <p className="text-xs text-amber-900 font-medium mt-0.5">
+                      The parent cancelled the previous tutor trial and requested a new tutor demo.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowDemoSchedule(true)}
+                  className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-transform hover:scale-102 cursor-pointer shrink-0"
+                >
+                  <Calendar className="w-4 h-4" />
+                  <span>Assign Another Tutor Demo</span>
+                </button>
+              </div>
+
+              {tuition.replacementReason && (
+                <div className="p-3 bg-white/90 rounded-xl border border-amber-200 text-xs text-slate-700">
+                  <span className="font-bold text-amber-950">Parent's Reason / Feedback: </span>
+                  <span className="italic">"{tuition.replacementReason}"</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Confirmed Tuition Banner (when activeDemo is null) */}
+          {tuition?.status === 'CONFIRMED' && !activeDemo && (
+            <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-green-50 border-2 border-emerald-300 rounded-2xl p-5 shadow-sm space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-200/80 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                    <CheckCircle2 className="w-6 h-6 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-black text-slate-900 text-base">Tuition Confirmed & Tutor Assigned</h4>
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 font-extrabold text-[10px] uppercase tracking-wide">
+                        Confirmed & Assigned
+                      </span>
+                      {tuition.guardianRating && (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-extrabold text-[10px] flex items-center gap-0.5">
+                          ⭐ {tuition.guardianRating} / 5 Stars
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-emerald-900 font-medium mt-0.5">
+                      This tuition is confirmed with <strong>{tuition.tutorName || tuition.hiredTutor || tuition.assignedTutorId || 'the assigned tutor'}</strong>.
+                    </p>
+                  </div>
+                </div>
+
+                {(tuition.assignedTutorId || tuition.assignedTutorCode) && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => navigateToTutorProfile(tuition.assignedTutorId || tuition.assignedTutorCode)}
+                      className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                    >
+                      <User className="w-3.5 h-3.5 text-[#84CC16]" />
+                      <span>View Tutor Profile</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {tuition.guardianFeedback && (
+                <div className="p-3 bg-white/90 rounded-xl border border-emerald-200 text-xs text-slate-800 space-y-0.5">
+                  <span className="font-bold text-emerald-950 block text-[11px] uppercase tracking-wide">Guardian Review:</span>
+                  <p className="italic font-medium">"{tuition.guardianFeedback}"</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Guardian Requested Demo Banner */}
           {tuition?.guardianSelectedTutorId && !activeDemo && (
             <div className="bg-gradient-to-r from-purple-50 via-fuchsia-50 to-pink-50 border-2 border-purple-300 rounded-2xl p-5 shadow-sm space-y-3">
@@ -405,61 +494,207 @@ export const AdminTuitionDetailsView: React.FC = () => {
             </div>
           )}
 
-          {/* Active Demo Assignment Banner */}
-          {activeDemo && (
-            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-5 shadow-sm space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-200/80 pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs shrink-0">
-                    <Calendar className="w-5 h-5 stroke-[2.5]" />
+          {/* Active Demo Assignment Banner - Dynamically shows Guardian Confirmation or Replacement Request */}
+          {activeDemo && (() => {
+            const isGuardianConfirmed = activeDemo.guardianDecision === 'HIRE' || activeDemo.status === 'Winner Selected' || tuition.status === 'CONFIRMED' || tuition.guardianDecision === 'HIRE';
+            const isGuardianRequestedReplacement = activeDemo.guardianDecision === 'REPLACE' || activeDemo.status === 'Replacement Requested' || tuition.guardianRequestedReplacement || tuition.guardianDecision === 'REPLACE';
+
+            if (isGuardianConfirmed) {
+              return (
+                <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-green-50 border-2 border-emerald-300 rounded-2xl p-5 shadow-sm space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-200/80 pb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                        <CheckCircle2 className="w-6 h-6 stroke-[2.5]" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-black text-slate-900 text-base">Guardian Confirmed This Tutor!</h4>
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 font-extrabold text-[10px] uppercase tracking-wide">
+                            Guardian Confirmed & Hired
+                          </span>
+                          {activeDemo.guardianRating && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-extrabold text-[10px] flex items-center gap-0.5">
+                              ⭐ {activeDemo.guardianRating} / 5 Stars
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-emerald-900 font-medium mt-0.5">
+                          Parent evaluated the trial demo and officially confirmed & hired <strong>{activeDemo.tutorName || tuition.tutorName || 'the tutor'}</strong>.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const tid = activeDemo.tutorCode || activeDemo.tutorId;
+                          if (tid) navigateToTutorProfile(tid);
+                        }}
+                        className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                      >
+                        <User className="w-3.5 h-3.5 text-[#84CC16]" />
+                        <span>View Tutor Profile</span>
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-black text-slate-900 text-base">Currently in Demo / Trial Class</h4>
-                      <span className="px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-950 font-extrabold text-[10px] uppercase tracking-wide animate-pulse">
-                        Trial in Progress
+
+                  {/* Feedback quote from Guardian if provided */}
+                  {activeDemo.guardianFeedback && (
+                    <div className="p-3 bg-white/90 rounded-xl border border-emerald-200 text-xs text-slate-800 space-y-0.5">
+                      <span className="font-bold text-emerald-950 block text-[11px] uppercase tracking-wide">Guardian Note / Review:</span>
+                      <p className="italic font-medium">"{activeDemo.guardianFeedback}"</p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div className="p-3 bg-white rounded-xl border border-emerald-200/90 shadow-2xs space-y-1">
+                      <span className="text-slate-500 font-bold block text-[11px] uppercase tracking-wider">Hired Tutor</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-black text-slate-900 text-sm">{activeDemo.tutorName || activeDemo.tutorCode}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">{activeDemo.tutorCode || activeDemo.tutorId}</span>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-white rounded-xl border border-emerald-200/90 shadow-2xs space-y-1">
+                      <span className="text-slate-500 font-bold block text-[11px] uppercase tracking-wider">Demo Date</span>
+                      <span className="font-extrabold text-emerald-900 text-sm block">
+                        {activeDemo.date ? (typeof activeDemo.date === 'string' && !activeDemo.date.includes('T') ? activeDemo.date : new Date(activeDemo.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })) : 'Completed'}
                       </span>
                     </div>
-                    <p className="text-xs text-amber-900 font-medium mt-0.5">
-                      This tutor has been assigned for the trial class. Admin can confirm and finalize this assignment below.
-                    </p>
+
+                    <div className="p-3 bg-white rounded-xl border border-emerald-200/90 shadow-2xs space-y-1">
+                      <span className="text-slate-500 font-bold block text-[11px] uppercase tracking-wider">Guardian Contact</span>
+                      <span className="font-bold text-slate-900 text-xs block truncate">{tuition.guardianName || activeDemo.guardianName || 'Guardian'}</span>
+                      <span className="font-semibold text-slate-600 text-[11px] block">📞 {tuition.guardianPhone || activeDemo.guardianPhone || 'N/A'}</span>
+                    </div>
                   </div>
                 </div>
+              );
+            }
 
-                <button
-                  type="button"
-                  onClick={handleOpenConfirmModal}
-                  className="px-4 py-2.5 rounded-xl bg-[#10B981] hover:bg-[#059669] text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-transform hover:scale-102 cursor-pointer shrink-0"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  <span>Confirm This Tutor</span>
-                </button>
-              </div>
+            if (isGuardianRequestedReplacement) {
+              return (
+                <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 border-2 border-rose-300 rounded-2xl p-5 shadow-sm space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-rose-200/80 pb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                        <AlertTriangle className="w-6 h-6 stroke-[2.5]" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-black text-slate-900 text-base">Guardian Requested Another Tutor Demo!</h4>
+                          <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-900 border border-rose-300 font-extrabold text-[10px] uppercase tracking-wide animate-pulse">
+                            Replacement Demo Needed
+                          </span>
+                        </div>
+                        <p className="text-xs text-rose-900 font-medium mt-0.5">
+                          Parent evaluated the trial with <strong>{activeDemo.tutorName}</strong> and cancelled this tutor. A new demo class needs to be arranged.
+                        </p>
+                      </div>
+                    </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                <div className="p-3 bg-white rounded-xl border border-amber-200/90 shadow-2xs space-y-1">
-                  <span className="text-slate-500 font-bold block text-[11px] uppercase tracking-wider">Assigned Tutor</span>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="font-black text-slate-900 text-sm">{activeDemo.tutorName || activeDemo.tutorCode}</span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[10px]">{activeDemo.tutorCode || activeDemo.tutorId}</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowDemoSchedule(true)}
+                      className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-transform hover:scale-102 cursor-pointer shrink-0"
+                    >
+                      <Calendar className="w-4 h-4" />
+                      <span>Assign Another Tutor Demo</span>
+                    </button>
+                  </div>
+
+                  {/* Reason / feedback from Guardian */}
+                  {(tuition.replacementReason || activeDemo.guardianFeedback) && (
+                    <div className="p-3 bg-white/90 rounded-xl border border-rose-200 text-xs text-slate-800 space-y-0.5">
+                      <span className="font-bold text-rose-950 block text-[11px] uppercase tracking-wide">Parent's Reason / Feedback:</span>
+                      <p className="italic font-medium">"{tuition.replacementReason || activeDemo.guardianFeedback}"</p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div className="p-3 bg-white rounded-xl border border-rose-200/90 shadow-2xs space-y-1">
+                      <span className="text-slate-500 font-bold block text-[11px] uppercase tracking-wider">Cancelled Tutor</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-black text-slate-900 text-sm">{activeDemo.tutorName || activeDemo.tutorCode}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-bold text-[10px]">{activeDemo.tutorCode || activeDemo.tutorId}</span>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-white rounded-xl border border-rose-200/90 shadow-2xs space-y-1">
+                      <span className="text-slate-500 font-bold block text-[11px] uppercase tracking-wider">Cancelled Demo Date</span>
+                      <span className="font-extrabold text-rose-900 text-sm block">
+                        {activeDemo.date ? (typeof activeDemo.date === 'string' && !activeDemo.date.includes('T') ? activeDemo.date : new Date(activeDemo.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })) : 'Completed'}
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-white rounded-xl border border-rose-200/90 shadow-2xs space-y-1">
+                      <span className="text-slate-500 font-bold block text-[11px] uppercase tracking-wider">Guardian Contact</span>
+                      <span className="font-bold text-slate-900 text-xs block truncate">{tuition.guardianName || activeDemo.guardianName || 'Guardian'}</span>
+                      <span className="font-semibold text-slate-600 text-[11px] block">📞 {tuition.guardianPhone || activeDemo.guardianPhone || 'N/A'}</span>
+                    </div>
                   </div>
                 </div>
+              );
+            }
 
-                <div className="p-3 bg-white rounded-xl border border-amber-200/90 shadow-2xs space-y-1">
-                  <span className="text-slate-500 font-bold block text-[11px] uppercase tracking-wider">Scheduled Trial Date</span>
-                  <span className="font-extrabold text-amber-900 text-sm block">
-                    {activeDemo.date ? new Date(activeDemo.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Scheduled'}
-                  </span>
+            // Default: Demo Scheduled / In progress awaiting guardian decision
+            return (
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-5 shadow-sm space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-200/80 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                      <Calendar className="w-5 h-5 stroke-[2.5]" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-black text-slate-900 text-base">Currently in Demo / Trial Class</h4>
+                        <span className="px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-950 font-extrabold text-[10px] uppercase tracking-wide animate-pulse">
+                          Awaiting Guardian Decision
+                        </span>
+                      </div>
+                      <p className="text-xs text-amber-900 font-medium mt-0.5">
+                        Trial class assigned to {activeDemo.tutorName}. Waiting for guardian to confirm or request another tutor demo.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenConfirmModal}
+                    className="px-4 py-2.5 rounded-xl bg-[#10B981] hover:bg-[#059669] text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-transform hover:scale-102 cursor-pointer shrink-0"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Confirm This Tutor</span>
+                  </button>
                 </div>
 
-                <div className="p-3 bg-white rounded-xl border border-amber-200/90 shadow-2xs space-y-1">
-                  <span className="text-slate-500 font-bold block text-[11px] uppercase tracking-wider">Guardian Contact</span>
-                  <span className="font-bold text-slate-900 text-xs block truncate">{tuition.guardianName || activeDemo.guardianName || 'Guardian'}</span>
-                  <span className="font-semibold text-slate-600 text-[11px] block">📞 {tuition.guardianPhone || activeDemo.guardianPhone || 'N/A'}</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="p-3 bg-white rounded-xl border border-amber-200/90 shadow-2xs space-y-1">
+                    <span className="text-slate-500 font-bold block text-[11px] uppercase tracking-wider">Assigned Tutor</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-black text-slate-900 text-sm">{activeDemo.tutorName || activeDemo.tutorCode}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[10px]">{activeDemo.tutorCode || activeDemo.tutorId}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-amber-200/90 shadow-2xs space-y-1">
+                    <span className="text-slate-500 font-bold block text-[11px] uppercase tracking-wider">Scheduled Trial Date</span>
+                    <span className="font-extrabold text-amber-900 text-sm block">
+                      {activeDemo.date ? (typeof activeDemo.date === 'string' && !activeDemo.date.includes('T') ? activeDemo.date : new Date(activeDemo.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })) : 'Scheduled'}
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-amber-200/90 shadow-2xs space-y-1">
+                    <span className="text-slate-500 font-bold block text-[11px] uppercase tracking-wider">Guardian Contact</span>
+                    <span className="font-bold text-slate-900 text-xs block truncate">{tuition.guardianName || activeDemo.guardianName || 'Guardian'}</span>
+                    <span className="font-semibold text-slate-600 text-[11px] block">📞 {tuition.guardianPhone || activeDemo.guardianPhone || 'N/A'}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <h3 className="text-lg font-bold text-slate-900 mb-4 border-b border-slate-100 pb-3 flex items-center gap-2">
@@ -763,21 +998,91 @@ export const AdminTuitionDetailsView: React.FC = () => {
                </div>
              </button>
 
-             {activeDemo && (
-               <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200 text-xs text-amber-950 space-y-1">
-                 <div className="flex items-center justify-between">
-                   <span className="font-bold flex items-center gap-1.5">
-                     <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                     In Demo:
-                   </span>
-                   <span className="font-black text-amber-900">{activeDemo.tutorName || activeDemo.tutorCode}</span>
+             {activeDemo && (() => {
+               const isConfirmed = activeDemo.guardianDecision === 'HIRE' || activeDemo.status === 'Winner Selected' || tuition.status === 'CONFIRMED';
+               const isReplacement = activeDemo.guardianDecision === 'REPLACE' || activeDemo.status === 'Replacement Requested' || tuition.guardianRequestedReplacement;
+
+               if (isConfirmed) {
+                 return (
+                   <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-950 space-y-1.5 shadow-2xs">
+                     <div className="flex items-center justify-between">
+                       <span className="font-bold flex items-center gap-1.5 text-emerald-800">
+                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                         Guardian Decision:
+                       </span>
+                       <span className="font-black px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 text-[10px] uppercase">
+                         Confirmed & Hired
+                       </span>
+                     </div>
+                     <div className="text-[11px] text-emerald-900 flex items-center justify-between">
+                       <span>Hired Tutor:</span>
+                       <span className="font-black">{activeDemo.tutorName || activeDemo.tutorCode}</span>
+                     </div>
+                     {activeDemo.guardianRating && (
+                       <div className="text-[11px] text-amber-600 flex items-center justify-between font-bold">
+                         <span>Parent Rating:</span>
+                         <span>⭐ {activeDemo.guardianRating} / 5 Stars</span>
+                       </div>
+                     )}
+                     {activeDemo.guardianFeedback && (
+                       <p className="text-[11px] text-emerald-900 italic bg-white/80 p-2 rounded-lg border border-emerald-100">
+                         "{activeDemo.guardianFeedback}"
+                       </p>
+                     )}
+                   </div>
+                 );
+               }
+
+               if (isReplacement) {
+                 return (
+                   <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-950 space-y-1.5 shadow-2xs">
+                     <div className="flex items-center justify-between">
+                       <span className="font-bold flex items-center gap-1.5 text-rose-800">
+                         <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                         Guardian Decision:
+                       </span>
+                       <span className="font-black px-2 py-0.5 rounded-full bg-rose-200 text-rose-900 text-[10px] uppercase">
+                         New Demo Needed
+                       </span>
+                     </div>
+                     <div className="text-[11px] text-rose-900 flex items-center justify-between">
+                       <span>Cancelled Tutor:</span>
+                       <span className="font-black">{activeDemo.tutorName}</span>
+                     </div>
+                     {(tuition.replacementReason || activeDemo.guardianFeedback) && (
+                       <p className="text-[11px] text-rose-900 italic bg-white/80 p-2 rounded-lg border border-rose-100">
+                         "{tuition.replacementReason || activeDemo.guardianFeedback}"
+                       </p>
+                     )}
+                     <button
+                       onClick={() => setShowDemoSchedule(true)}
+                       className="w-full py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-black text-[11px] flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                     >
+                       <Calendar className="w-3 h-3" /> Assign Another Demo
+                     </button>
+                   </div>
+                 );
+               }
+
+               return (
+                 <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200 text-xs text-amber-950 space-y-1">
+                   <div className="flex items-center justify-between">
+                     <span className="font-bold flex items-center gap-1.5">
+                       <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                       In Demo:
+                     </span>
+                     <span className="font-black text-amber-900">{activeDemo.tutorName || activeDemo.tutorCode}</span>
+                   </div>
+                   <div className="text-[11px] text-amber-800 flex items-center justify-between">
+                     <span>Demo Time:</span>
+                     <span className="font-semibold">{activeDemo.date ? (typeof activeDemo.date === 'string' && !activeDemo.date.includes('T') ? activeDemo.date : new Date(activeDemo.date).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })) : 'Scheduled'}</span>
+                   </div>
+                   <div className="text-[10px] text-amber-700 font-bold bg-amber-100/80 px-2 py-0.5 rounded text-center mt-1">
+                     ⏳ Awaiting Guardian Confirmation or Feedback
+                   </div>
                  </div>
-                 <div className="text-[11px] text-amber-800 flex items-center justify-between">
-                   <span>Demo Time:</span>
-                   <span className="font-semibold">{activeDemo.date ? new Date(activeDemo.date).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Scheduled'}</span>
-                 </div>
-               </div>
-             )}
+               );
+             })()}
 
 
           </div>

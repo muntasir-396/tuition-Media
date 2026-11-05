@@ -62,7 +62,7 @@ export const educationEntrySchema = z.object({
 export const preferencesSectionSchema = z.object({
   mediums: z.array(z.string()).min(1, 'Select at least one tutoring medium'),
   classes: z.array(z.string()).min(1, 'Select at least one class group'),
-  subjects: z.union([z.array(z.string()), z.record(z.any())]).optional(),
+  subjects: z.union([z.array(z.string()), z.record(z.string(), z.any())]).optional(),
   tuitionTypes: z.array(z.string()).min(1, 'Select at least one tuition mode (Home, Online, Batch)'),
   studentGenderPref: z.enum(['Male', 'Female', 'Any']).default('Any'),
   maxStudents: z.number().int().min(1).max(20).default(1),
