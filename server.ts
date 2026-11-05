@@ -1,9 +1,11 @@
 import express from "express";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { generateToken, verifyToken, authMiddleware, requireAdmin } from "./src/db/auth.js";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { db } from "./src/db/index.js";
+import { db, pool } from "./src/db/index.js";
 import { eq, desc, sql, inArray, or } from "drizzle-orm";
 import { seedDatabase } from "./src/db/seed.js";
 import {
@@ -1025,15 +1027,64 @@ async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
 
-  app.use(express.json());
+  // 1. Security Headers (Helmet)
+  app.use(helmet({
+    contentSecurityPolicy: false, // Allows Vite inline scripts, SVG avatars (DiceBear), and maps
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+  }));
+
+  // 2. Body Parser & Cookie Parser
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   app.use(cookieParser());
+
+  // 3. Production Rate Limiting
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 60, // 60 requests per 15 minutes per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many authentication attempts from this IP. Please try again after 15 minutes.' }
+  });
+
+  const generalApiLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 600, // 600 requests per minute per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  app.use("/api/auth/login", authLimiter);
+  app.use("/api/auth/register", authLimiter);
+  app.use("/api/", generalApiLimiter);
+
+  // 4. Platform Health Check & Monitoring Endpoint
+  app.get("/api/health", async (_req, res) => {
+    let dbStatus = "connected";
+    try {
+      await db.execute(sql`SELECT 1`);
+    } catch (e: any) {
+      dbStatus = "error: " + (e.message || "database unavailable");
+    }
+
+    res.json({
+      status: "ok",
+      environment: process.env.NODE_ENV || "development",
+      uptimeSeconds: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+      database: dbStatus
+    });
+  });
 
   try { await seedDatabase(); } catch (e) { console.error("Failed to seed db:", e); }
 
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { role, username, password, phoneOrEmail } = req.body;
+      const cleanIdentifier = (phoneOrEmail || '').toString().trim();
       let userProfile = null;
+      let matchedTutorObj: any = null;
       
       if (role === 'admin' || role === 'super-admin') {
         if (username === 'superadmin' && password === 'admin123') {
@@ -1041,23 +1092,139 @@ async function startServer() {
         } else if (username === 'coadmin' && password === 'admin123') {
           userProfile = { id: 'ADM-002', name: 'Co Admin', username: 'coadmin', role: 'admin' };
         } else {
-          return res.status(401).json({ error: 'Invalid admin credentials' });
+          return res.status(401).json({ error: 'Invalid admin username or password.' });
         }
-      } else {
-        const matchedTutor = mockTutors.find((t: any) => 
-          (t.phone && t.phone === phoneOrEmail) || 
-          (t.email && t.email === phoneOrEmail) || 
-          (t.tutorCode && t.tutorCode === phoneOrEmail)
+      } else if (role === 'parent' || role === 'guardian') {
+        if (!cleanIdentifier) {
+          return res.status(400).json({ error: 'Please enter your phone number or email.' });
+        }
+
+        // 1. Search in mockGuardians
+        let matchedGuardian = mockGuardians.find((g: any) => 
+          (g.phone && g.phone === cleanIdentifier) || 
+          (g.email && g.email.toLowerCase() === cleanIdentifier.toLowerCase())
         );
 
+        // 2. Search in Database if not found in mock
+        if (!matchedGuardian) {
+          try {
+            const dbGuardians = await db.select({
+              id: guardianProfiles.id,
+              userId: guardianProfiles.userId,
+              name: guardianProfiles.fullName,
+              phone: guardianProfiles.phone,
+              email: profiles.email,
+              location: guardianProfiles.address
+            })
+            .from(guardianProfiles)
+            .leftJoin(profiles, eq(guardianProfiles.userId, profiles.id))
+            .where(or(
+              eq(guardianProfiles.phone, cleanIdentifier),
+              sql`${guardianProfiles.phone} = ${cleanIdentifier}`,
+              eq(profiles.email, cleanIdentifier),
+              eq(profiles.phone, cleanIdentifier)
+            ))
+            .limit(1);
+
+            if (dbGuardians.length > 0) {
+              matchedGuardian = {
+                id: dbGuardians[0].id,
+                userId: dbGuardians[0].userId,
+                fullName: dbGuardians[0].name || 'Guardian',
+                phone: dbGuardians[0].phone || cleanIdentifier,
+                email: dbGuardians[0].email || `${cleanIdentifier}@tutorlink.com`,
+                location: dbGuardians[0].location || 'Dhaka'
+              };
+            }
+          } catch (dbE) {}
+        }
+
+        // 3. If account does NOT exist, enforce sign-up requirement
+        if (!matchedGuardian) {
+          return res.status(404).json({
+            notFound: true,
+            error: `No guardian account found with "${cleanIdentifier}". Please click "Create a free account now" below to register.`
+          });
+        }
+
+        userProfile = {
+          id: matchedGuardian.userId || matchedGuardian.id,
+          name: matchedGuardian.fullName || matchedGuardian.name || cleanIdentifier,
+          role: 'parent',
+          phone: matchedGuardian.phone || cleanIdentifier,
+          email: matchedGuardian.email || `${cleanIdentifier}@tutorlink.com`
+        };
+
+      } else {
+        // Tutor Login
+        if (!cleanIdentifier) {
+          return res.status(400).json({ error: 'Please enter your phone number, email, or Tutor Code.' });
+        }
+
+        // 1. Search in mockTutors
+        let matchedTutor = mockTutors.find((t: any) => 
+          (t.phone && t.phone === cleanIdentifier) || 
+          (t.email && t.email.toLowerCase() === cleanIdentifier.toLowerCase()) || 
+          (t.tutorCode && t.tutorCode.toLowerCase() === cleanIdentifier.toLowerCase()) ||
+          (t.id && t.id.toLowerCase() === cleanIdentifier.toLowerCase())
+        );
+
+        // 2. Search in Database if not found in mock
+        if (!matchedTutor) {
+          try {
+            const dbTutors = await db.select({
+              id: tutorProfiles.id,
+              userId: tutorProfiles.userId,
+              tutorCode: tutorProfiles.tutorCode,
+              fullName: tutorProfiles.fullName,
+              phone: profiles.phone,
+              email: profiles.email,
+              university: tutorProfiles.university,
+              department: tutorProfiles.department
+            })
+            .from(tutorProfiles)
+            .leftJoin(profiles, eq(tutorProfiles.userId, profiles.id))
+            .where(or(
+              eq(tutorProfiles.tutorCode, cleanIdentifier),
+              sql`${tutorProfiles.tutorCode} ILIKE ${cleanIdentifier}`,
+              eq(profiles.phone, cleanIdentifier),
+              eq(profiles.email, cleanIdentifier)
+            ))
+            .limit(1);
+
+            if (dbTutors.length > 0) {
+              matchedTutor = {
+                id: dbTutors[0].tutorCode || dbTutors[0].id,
+                tutorCode: dbTutors[0].tutorCode,
+                userId: dbTutors[0].userId,
+                fullName: dbTutors[0].fullName,
+                phone: dbTutors[0].phone || cleanIdentifier,
+                email: dbTutors[0].email || `${cleanIdentifier}@tutorlink.com`,
+                university: dbTutors[0].university || 'University Student',
+                department: dbTutors[0].department || 'General'
+              };
+            }
+          } catch (dbE) {}
+        }
+
+        // 3. If account does NOT exist, enforce sign-up requirement
+        if (!matchedTutor) {
+          return res.status(404).json({
+            notFound: true,
+            error: `No tutor account found with "${cleanIdentifier}". Please click "Create a free account now" below to register as a tutor.`
+          });
+        }
+
+        matchedTutorObj = matchedTutor;
         userProfile = { 
-          id: matchedTutor?.userId || matchedTutor?.id || ('usr-' + Date.now()), 
-          name: matchedTutor?.fullName || matchedTutor?.name || phoneOrEmail || 'User', 
-          role: role || 'tutor',
-          phone: matchedTutor?.phone || phoneOrEmail,
-          email: matchedTutor?.email || (phoneOrEmail.includes('@') ? phoneOrEmail : `${phoneOrEmail}@tutorlink.com`),
-          university: matchedTutor?.university || 'University Student',
-          department: matchedTutor?.department || 'General'
+          id: matchedTutor.userId || matchedTutor.id, 
+          name: matchedTutor.fullName || matchedTutor.name || cleanIdentifier, 
+          role: 'tutor',
+          tutorCode: matchedTutor.tutorCode,
+          phone: matchedTutor.phone || cleanIdentifier,
+          email: matchedTutor.email || (cleanIdentifier.includes('@') ? cleanIdentifier : `${cleanIdentifier}@tutorlink.com`),
+          university: matchedTutor.university || 'University Student',
+          department: matchedTutor.department || 'General'
         };
       }
       
@@ -1069,35 +1236,86 @@ async function startServer() {
         path: '/'
       });
       
-      res.json({ success: true, user: userProfile });
+      res.json({ 
+        success: true, 
+        user: userProfile, 
+        tutor: matchedTutorObj ? mapTutorToOld(matchedTutorObj) : undefined 
+      });
     } catch (e) {
-      res.status(500).json({ error: 'Login failed' });
+      console.error("Login error:", e);
+      res.status(500).json({ error: 'Login failed. Please try again.' });
     }
   });
 
   app.post("/api/auth/register", async (req, res) => {
     try {
       const { role, fullName, phoneOrEmail, password, university, department, gender, district, area, tutoringExperience } = req.body;
+      const cleanIdentifier = (phoneOrEmail || '').toString().trim();
+      const cleanName = (fullName || '').toString().trim();
+
+      if (!cleanIdentifier) {
+        return res.status(400).json({ error: 'Phone number or email is required.' });
+      }
+      if (!cleanName) {
+        return res.status(400).json({ error: 'Full name is required.' });
+      }
+
+      // 1. Check if user already exists (duplicate check)
+      const existingTutor = mockTutors.find((t: any) => 
+        (t.phone && t.phone === cleanIdentifier) || 
+        (t.email && t.email.toLowerCase() === cleanIdentifier.toLowerCase())
+      );
+      const existingGuardian = mockGuardians.find((g: any) => 
+        (g.phone && g.phone === cleanIdentifier) || 
+        (g.email && g.email.toLowerCase() === cleanIdentifier.toLowerCase())
+      );
+
+      if (existingTutor || existingGuardian) {
+        return res.status(409).json({
+          alreadyExists: true,
+          error: `An account with "${cleanIdentifier}" already exists. Please sign in instead.`
+        });
+      }
+
+      // Check database for existing profile
+      try {
+        const existingDb = await db.select({ id: profiles.id })
+          .from(profiles)
+          .where(or(eq(profiles.phone, cleanIdentifier), eq(profiles.email, cleanIdentifier)))
+          .limit(1);
+
+        if (existingDb.length > 0) {
+          return res.status(409).json({
+            alreadyExists: true,
+            error: `An account with "${cleanIdentifier}" already exists in our database. Please sign in instead.`
+          });
+        }
+      } catch (dbE) {}
+
+      // 2. Build User Profile
+      const userId = 'usr-' + Date.now();
       const userProfile = { 
-        id: 'usr-' + Date.now(), 
-        name: fullName || phoneOrEmail, 
-        role: role, 
+        id: userId, 
+        name: cleanName, 
+        role: role === 'parent' || role === 'guardian' ? 'parent' : 'tutor', 
         university: university || null,
         department: department || null,
-        email: phoneOrEmail.includes('@') ? phoneOrEmail : `${phoneOrEmail}@tutorlink.com`,
-        phone: phoneOrEmail 
+        email: cleanIdentifier.includes('@') ? cleanIdentifier : `${cleanIdentifier}@tutorlink.com`,
+        phone: cleanIdentifier 
       };
 
       let newTutorProfile: any = null;
+      let newGuardianProfile: any = null;
+
       if (role === 'tutor') {
         const tutorCode = 'TT-' + Math.floor(10000 + Math.random() * 90000);
         newTutorProfile = {
           id: tutorCode,
           tutorCode: tutorCode,
           userId: userProfile.id,
-          fullName: fullName || 'New Tutor',
-          name: fullName || 'New Tutor',
-          phone: phoneOrEmail,
+          fullName: cleanName,
+          name: cleanName,
+          phone: cleanIdentifier,
           email: userProfile.email,
           university: university || 'Dhaka University',
           department: department || 'General',
@@ -1138,7 +1356,7 @@ async function startServer() {
         };
         mockTutors.unshift(newTutorProfile);
 
-        // Attempt save in database
+        // Save in database
         try {
           const [prof] = await db.insert(profiles).values({
             fullName: userProfile.name,
@@ -1164,7 +1382,44 @@ async function startServer() {
             });
           }
         } catch (dbErr) {
-          console.error("DB Register error:", dbErr);
+          console.error("DB Tutor Register error:", dbErr);
+        }
+      } else {
+        // Parent / Guardian Registration
+        const guardianId = 'G-' + Date.now();
+        newGuardianProfile = {
+          id: guardianId,
+          userId: userProfile.id,
+          fullName: cleanName,
+          name: cleanName,
+          phone: cleanIdentifier,
+          email: userProfile.email,
+          location: `${area || 'Dhaka'}, Bangladesh`,
+          status: 'Active',
+          totalTuitions: 0,
+          activeTuitions: 0
+        };
+        mockGuardians.unshift(newGuardianProfile);
+
+        // Save in database
+        try {
+          const [prof] = await db.insert(profiles).values({
+            fullName: userProfile.name,
+            phone: userProfile.phone,
+            email: userProfile.email,
+            accountStatus: 'active'
+          }).returning();
+
+          if (prof) {
+            await db.insert(guardianProfiles).values({
+              userId: prof.id,
+              fullName: cleanName,
+              phone: cleanIdentifier,
+              address: `${area || 'Dhaka'}, Bangladesh`
+            });
+          }
+        } catch (dbErr) {
+          console.error("DB Guardian Register error:", dbErr);
         }
       }
 
@@ -1175,9 +1430,14 @@ async function startServer() {
         sameSite: 'lax',
         path: '/'
       });
-      res.json({ success: true, user: userProfile, tutor: newTutorProfile ? mapTutorToOld(newTutorProfile) : undefined });
-    } catch (e) {
-      res.status(500).json({ error: 'Registration failed' });
+      res.json({ 
+        success: true, 
+        user: userProfile, 
+        tutor: newTutorProfile ? mapTutorToOld(newTutorProfile) : undefined 
+      });
+    } catch (e: any) {
+      console.error("Registration error:", e);
+      res.status(500).json({ error: e.message || 'Registration failed' });
     }
   });
 
@@ -2990,6 +3250,15 @@ async function startServer() {
           await db.update(tuitionRequests)
             .set({ status: 'CONFIRMED', updatedAt: new Date() })
             .where(sql`${tuitionRequests.id}::text = ${tuitionId} OR ${tuitionRequests.jobCode} = ${tuitionId}`);
+          
+          await db.update(demoClasses)
+            .set({
+              status: 'completed',
+              guardianRating: rating || 5,
+              guardianFeedback: feedback || 'Selected and confirmed by parent',
+              updatedAt: new Date()
+            })
+            .where(sql`${demoClasses.tuitionId}::text = ${tuitionId} OR ${demoClasses.id}::text = ${id}`);
         } catch (dbE) {}
 
         return res.json({ 
@@ -3032,6 +3301,14 @@ async function startServer() {
           await db.update(tuitionRequests)
             .set({ status: 'TEACHERS_APPLIED', updatedAt: new Date() })
             .where(sql`${tuitionRequests.id}::text = ${tuitionId} OR ${tuitionRequests.jobCode} = ${tuitionId}`);
+
+          await db.update(demoClasses)
+            .set({
+              status: 'cancelled',
+              guardianFeedback: replacementExplanation,
+              updatedAt: new Date()
+            })
+            .where(sql`${demoClasses.tuitionId}::text = ${tuitionId} OR ${demoClasses.id}::text = ${id}`);
         } catch (dbE) {}
 
         return res.json({ 
@@ -3791,14 +4068,55 @@ async function startServer() {
     }
   });
 
-  // Get demos for a specific tuition
+  // Get demos for a specific tuition (Merged Database & Cache)
   app.get("/api/admin/tuitions/:id/demos", async (req, res) => {
     try {
       const { id } = req.params;
+      let dbDemos: any[] = [];
+      try {
+        const rows = await db.select({
+          demo: demoClasses,
+          tutor: tutorProfiles,
+          guardian: guardianProfiles
+        })
+        .from(demoClasses)
+        .leftJoin(tutorProfiles, eq(demoClasses.tutorId, tutorProfiles.id))
+        .leftJoin(guardianProfiles, eq(demoClasses.guardianId, guardianProfiles.id))
+        .where(sql`${demoClasses.tuitionId}::text = ${id}`);
+
+        dbDemos = rows.map((r: any) => ({
+          id: r.demo.id,
+          tuitionId: r.demo.tuitionId,
+          tutorId: r.tutor?.tutorCode || r.tutor?.id,
+          tutorCode: r.tutor?.tutorCode || r.tutor?.id,
+          tutorName: r.tutor?.name || 'Tutor',
+          guardianName: r.guardian?.name || 'Guardian',
+          guardianPhone: r.guardian?.phone || '',
+          scheduledDate: r.demo.scheduledDate,
+          date: r.demo.scheduledDate ? new Date(r.demo.scheduledDate).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : 'Scheduled',
+          status: r.demo.status,
+          guardianRating: r.demo.guardianRating,
+          guardianFeedback: r.demo.guardianFeedback,
+          notes: r.demo.adminNotes,
+          location: r.demo.location,
+        }));
+      } catch (dbE) {}
+
       const matched = mockDemos.filter((d: any) => 
         d.tuitionId === id || d.jobCode === id || (id && String(d.tuitionId).includes(id)) || (id && String(d.jobCode).includes(id))
       );
-      res.json({ demos: matched });
+
+      const seen = new Set<string>();
+      const combined: any[] = [];
+      for (const d of [...dbDemos, ...matched]) {
+        const key = d.id || `${d.tuitionId}-${d.tutorId}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          combined.push(d);
+        }
+      }
+
+      res.json({ demos: combined });
     } catch (e: any) {
       res.status(500).json({ error: e.message || "Failed to load demos" });
     }
@@ -3924,9 +4242,31 @@ async function startServer() {
     });
   }
 
-  app.listen(Number(PORT), "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT}`);
+  const server = app.listen(Number(PORT), "0.0.0.0", () => {
+    console.log(`Server running on port ${PORT} [Mode: ${process.env.NODE_ENV || 'development'}]`);
   });
+
+  // Graceful Process Termination for Production / Docker / Kubernetes
+  const shutdown = async (signal: string) => {
+    console.log(`Received ${signal}. Gracefully stopping server...`);
+    server.close(async () => {
+      console.log('HTTP connection listener closed.');
+      try {
+        await pool.end();
+        console.log('PostgreSQL connection pool closed.');
+      } catch (err) {}
+      process.exit(0);
+    });
+
+    // Force terminate after 10s if stuck
+    setTimeout(() => {
+      console.error('Forcefully terminating server after timeout.');
+      process.exit(1);
+    }, 10000).unref();
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 startServer();

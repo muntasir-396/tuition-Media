@@ -1,8 +1,12 @@
+import * as dotenv from 'dotenv';
+dotenv.config();
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'tutorlink-secret-key-for-jwt-2026';
-// In a real Supabase setup, JWT_SECRET would be your Supabase project JWT secret.
+if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'tutorlink-secret-key-for-jwt-2026')) {
+  console.warn('⚠️ WARNING: Using fallback JWT_SECRET in production. Set a unique JWT_SECRET in .env for security.');
+}
 
 export const generateToken = (payload: any) => {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });

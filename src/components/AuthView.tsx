@@ -17,6 +17,8 @@ import {
   BookOpen,
   Briefcase,
   Award,
+  AlertTriangle,
+  AlertCircle
 } from 'lucide-react';
 
 const TOP_UNIVERSITIES = ['BUET', 'Dhaka University', 'DMC', 'NSU', 'BRAC University', 'CUET', 'RUET', 'IBA'];
@@ -41,11 +43,13 @@ export const AuthView: React.FC = () => {
   const [experience, setExperience] = useState<string>('2');
   
   const [submittedMessage, setSubmittedMessage] = useState<string>('');
+  const [infoBanner, setInfoBanner] = useState<{ text: string, type: 'error' | 'warning' | 'info' } | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setInfoBanner(null);
     
     const endpoint = isSignUpMode ? '/api/auth/register' : '/api/auth/login';
     const payload = isSignUpMode 
@@ -102,11 +106,31 @@ export const AuthView: React.FC = () => {
           setActiveTab(activeRole === 'tutor' ? 'profile' : 'guardian-dashboard');
         }, 800);
       } else {
-        alert(data.error || 'Authentication failed');
+        if (data.notFound) {
+          setInfoBanner({
+            type: 'warning',
+            text: data.error || `No ${activeRole} account found with this phone number. We have switched you to Sign Up mode below so you can create your account!`
+          });
+          setIsSignUpMode(true);
+        } else if (data.alreadyExists) {
+          setInfoBanner({
+            type: 'info',
+            text: data.error || `An account with this phone number or email already exists. Switched you to Sign In mode.`
+          });
+          setIsSignUpMode(false);
+        } else {
+          setInfoBanner({
+            type: 'error',
+            text: data.error || 'Authentication failed. Please check your details.'
+          });
+        }
       }
     } catch (e) {
       console.error("Auth error", e);
-      alert('Network error during authentication');
+      setInfoBanner({
+        type: 'error',
+        text: 'Network error during authentication. Please verify your connection.'
+      });
     } finally {
       setIsLoading(false);
     }
@@ -169,6 +193,33 @@ export const AuthView: React.FC = () => {
             <div className="text-[11px] text-slate-700">
               <span className="font-extrabold text-slate-900 block">Tuition Terminal Tutor Membership</span>
               <span>Get instant unique Tutor Code, verified badge, and apply for verified tuitions across Bangladesh.</span>
+            </div>
+          </div>
+        )}
+
+        {/* Dynamic Notification Banner (e.g. Account not found -> Switched to Sign Up) */}
+        {infoBanner && (
+          <div className={`p-4 rounded-2xl border flex items-start gap-3 shadow-xs text-xs animate-in fade-in duration-200 ${
+            infoBanner.type === 'warning'
+              ? 'bg-amber-50 border-amber-300 text-amber-950'
+              : infoBanner.type === 'error'
+              ? 'bg-rose-50 border-rose-300 text-rose-950'
+              : 'bg-blue-50 border-blue-300 text-blue-950'
+          }`}>
+            <div className="shrink-0 mt-0.5">
+              {infoBanner.type === 'warning' ? (
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              ) : infoBanner.type === 'error' ? (
+                <AlertCircle className="w-5 h-5 text-rose-600" />
+              ) : (
+                <Sparkles className="w-5 h-5 text-blue-600" />
+              )}
+            </div>
+            <div className="flex-1 space-y-1">
+              <span className="font-bold block text-sm">
+                {infoBanner.type === 'warning' ? 'No Account Found' : infoBanner.type === 'error' ? 'Authentication Notice' : 'Notice'}
+              </span>
+              <p className="font-medium leading-relaxed">{infoBanner.text}</p>
             </div>
           </div>
         )}
