@@ -3,48 +3,73 @@ import assert from 'node:assert';
 console.log("🧪 Starting Authentication & Sign-Up Enforcement Tests...\n");
 
 // Mock existing stores mimicking backend behavior
-const mockTutors = [
-  { id: 'TT-1001', tutorCode: 'TT-1001', phone: '01700000001', email: 'muntasir@example.com', name: 'Muntasir Mamun' },
-  { id: 'TT-1002', tutorCode: 'TT-1002', phone: '01800000002', email: 'farhana@example.com', name: 'Farhana Yasmin' },
+const mockTutors: any[] = [
+  { id: 'TT-1001', tutorCode: 'TT-1001', phone: '01700000001', email: 'muntasir@example.com', name: 'Muntasir Mamun', password: 'password123' },
+  { id: 'TT-1002', tutorCode: 'TT-1002', phone: '01800000002', email: 'farhana@example.com', name: 'Farhana Yasmin', password: 'password123' },
 ];
 
-const mockGuardians = [
-  { id: 'G-001', fullName: 'Md. Rahman', phone: '01712345678', email: 'rahman@example.com' },
-  { id: 'G-004', fullName: 'Parent', phone: '01715998756', email: 'parent@example.com' },
+const mockGuardians: any[] = [
+  { id: 'G-001', fullName: 'Md. Rahman', phone: '01712345678', email: 'rahman@example.com', password: 'password123' },
+  { id: 'G-004', fullName: 'Parent', phone: '01715998756', email: 'parent@example.com', password: 'password123' },
 ];
 
-function loginUser(role: string, phoneOrEmail: string) {
+function loginUser(role: string, phoneOrEmail: string, password: string = 'password123') {
   const clean = phoneOrEmail.trim();
   if (role === 'parent' || role === 'guardian') {
-    const matched = mockGuardians.find(g => g.phone === clean || g.email === clean);
+    let matched = mockGuardians.find(g => g.phone === clean || g.email === clean);
+    // Cross-role fallback to tutor
+    if (!matched) {
+      const tutorMatch = mockTutors.find(t => t.phone === clean || t.email === clean || t.tutorCode.toLowerCase() === clean.toLowerCase());
+      if (tutorMatch) {
+        matched = tutorMatch;
+      }
+    }
     if (!matched) {
       return { status: 404, notFound: true, error: `No guardian account found with "${clean}". Please Sign Up.` };
     }
+    const expectedPassword = matched.password || 'password123';
+    if (password !== expectedPassword) {
+      return { status: 401, passwordIncorrect: true, error: 'Password incorrect. Please check your password and try again.' };
+    }
     return { status: 200, success: true, user: matched };
   } else {
-    const matched = mockTutors.find(t => t.phone === clean || t.email === clean || t.tutorCode.toLowerCase() === clean.toLowerCase());
+    let matched = mockTutors.find(t => t.phone === clean || t.email === clean || t.tutorCode.toLowerCase() === clean.toLowerCase());
+    // Cross-role fallback to guardian
+    if (!matched) {
+      const guardianMatch = mockGuardians.find(g => g.phone === clean || g.email === clean);
+      if (guardianMatch) {
+        matched = guardianMatch;
+      }
+    }
     if (!matched) {
       return { status: 404, notFound: true, error: `No tutor account found with "${clean}". Please Sign Up.` };
+    }
+    const expectedPassword = matched.password || 'password123';
+    if (password !== expectedPassword) {
+      return { status: 401, passwordIncorrect: true, error: 'Password incorrect. Please check your password and try again.' };
     }
     return { status: 200, success: true, user: matched };
   }
 }
 
-function registerUser(role: string, fullName: string, phoneOrEmail: string) {
+function registerUser(role: string, fullName: string, phoneOrEmail: string, password: string = 'password123') {
   const clean = phoneOrEmail.trim();
-  const exists = mockTutors.some(t => t.phone === clean || t.email === clean) || mockGuardians.some(g => g.phone === clean || g.email === clean);
-  if (exists) {
-    return { status: 409, alreadyExists: true, error: `An account with "${clean}" already exists. Please sign in.` };
-  }
-
-  if (role === 'parent' || role === 'guardian') {
-    const newG = { id: 'G-' + Date.now(), fullName, phone: clean, email: clean.includes('@') ? clean : `${clean}@tutorlink.com` };
-    mockGuardians.push(newG);
-    return { status: 200, success: true, user: newG };
-  } else {
-    const newT = { id: 'TT-9999', tutorCode: 'TT-9999', phone: clean, email: clean.includes('@') ? clean : `${clean}@tutorlink.com`, name: fullName };
+  if (role === 'tutor') {
+    const exists = mockTutors.some(t => t.phone === clean || t.email === clean);
+    if (exists) {
+      return { status: 409, alreadyExists: true, error: `A tutor account with "${clean}" already exists. Please sign in instead.` };
+    }
+    const newT = { id: 'TT-9999', tutorCode: 'TT-9999', phone: clean, email: clean.includes('@') ? clean : `${clean}@tutorlink.com`, name: fullName, password };
     mockTutors.push(newT);
     return { status: 200, success: true, user: newT };
+  } else {
+    const exists = mockGuardians.some(g => g.phone === clean || g.email === clean);
+    if (exists) {
+      return { status: 409, alreadyExists: true, error: `A guardian account with "${clean}" already exists. Please sign in instead.` };
+    }
+    const newG = { id: 'G-' + Date.now(), fullName, phone: clean, email: clean.includes('@') ? clean : `${clean}@tutorlink.com`, password };
+    mockGuardians.push(newG);
+    return { status: 200, success: true, user: newG };
   }
 }
 
@@ -88,6 +113,41 @@ const unknownTutorLogin = loginUser('tutor', 'TT-999999');
 assert.strictEqual(unknownTutorLogin.status, 404);
 assert.strictEqual(unknownTutorLogin.notFound, true);
 console.log("✅ Passed Test 5: Tutor login works by phone and Tutor Code, rejects unknown codes.\n");
+
+// Test 6: Wrong password rejection for Guardian and Tutor
+console.log("Test 6: Wrong password validation & error rejection...");
+const wrongPassGuardian = loginUser('parent', '01712345678', 'wrongPassword123');
+assert.strictEqual(wrongPassGuardian.status, 401);
+assert.strictEqual(wrongPassGuardian.passwordIncorrect, true);
+assert.strictEqual(wrongPassGuardian.error, 'Password incorrect. Please check your password and try again.');
+
+const correctPassGuardian = loginUser('parent', '01712345678', 'password123');
+assert.strictEqual(correctPassGuardian.status, 200);
+assert.strictEqual(correctPassGuardian.success, true);
+
+const wrongPassTutor = loginUser('tutor', 'TT-1001', 'wrongPassword123');
+assert.strictEqual(wrongPassTutor.status, 401);
+assert.strictEqual(wrongPassTutor.passwordIncorrect, true);
+assert.strictEqual(wrongPassTutor.error, 'Password incorrect. Please check your password and try again.');
+
+const correctPassTutor = loginUser('tutor', 'TT-1001', 'password123');
+assert.strictEqual(correctPassTutor.status, 200);
+assert.strictEqual(correctPassTutor.success, true);
+console.log("✅ Passed Test 6: Wrong password correctly returns 401 Password Incorrect for both Guardian and Tutor.\n");
+
+// Test 7: Cross-role login resilience & registering new role for same user
+console.log("Test 7: Cross-role login & new role registration...");
+// Guardian 01712345678 can log in even if Tutor tab was selected
+const crossRoleLogin = loginUser('tutor', '01712345678', 'password123');
+assert.strictEqual(crossRoleLogin.status, 200);
+assert.strictEqual(crossRoleLogin.success, true);
+assert.strictEqual(crossRoleLogin.user.fullName, 'Md. Rahman');
+
+// Guardian can also register as a Tutor with same phone
+const dualReg = registerUser('tutor', 'Md. Rahman Tutor', '01712345678', 'password123');
+assert.strictEqual(dualReg.status, 200);
+assert.strictEqual(dualReg.success, true);
+console.log("✅ Passed Test 7: Cross-role login succeeds and dual-role registration works seamlessly.\n");
 
 console.log("🎉 ALL AUTHENTICATION & SIGN-UP ENFORCEMENT TESTS PASSED SUCCESSFULLY!");
 

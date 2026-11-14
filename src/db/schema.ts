@@ -157,6 +157,7 @@ export const profiles = pgTable('profiles', {
   email: text('email'),
   phone: text('phone'),
   avatarUrl: text('avatar_url'),
+  passwordHash: text('password_hash'),
   accountStatus: text('account_status').default('active'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

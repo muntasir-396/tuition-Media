@@ -4,8 +4,10 @@ export async function seedDatabase() {
   try {
     const client = await pool.connect();
     try {
-      // 1. Ensure columns on tutor_profiles
+      // 1. Ensure columns on tutor_profiles & profiles
       await client.query(`
+        ALTER TABLE IF EXISTS profiles ADD COLUMN IF NOT EXISTS password_hash text;
+
         ALTER TABLE IF EXISTS tutor_profiles ADD COLUMN IF NOT EXISTS status text DEFAULT 'active';
         ALTER TABLE IF EXISTS tutor_profiles ADD COLUMN IF NOT EXISTS tagline text;
         ALTER TABLE IF EXISTS tutor_profiles ADD COLUMN IF NOT EXISTS short_bio text;

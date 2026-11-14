@@ -2,7 +2,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import { generateToken, verifyToken, authMiddleware, requireAdmin } from "./src/db/auth.js";
+import { generateToken, verifyToken, authMiddleware, requireAdmin, hashPassword, verifyUserPassword } from "./src/db/auth.js";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { db, pool } from "./src/db/index.js";
@@ -1079,6 +1079,25 @@ async function startServer() {
 
   try { await seedDatabase(); } catch (e) { console.error("Failed to seed db:", e); }
 
+  async function validateAndUpgradePassword(password: string, userObj: any): Promise<boolean> {
+    const currentHash = userObj.passwordHash || userObj.password;
+    if (!currentHash) {
+      if (password && password.length >= 4) {
+        const newHash = hashPassword(password);
+        userObj.passwordHash = newHash;
+        userObj.password = newHash;
+        if (userObj.userId) {
+          try {
+            await db.update(profiles).set({ passwordHash: newHash }).where(eq(profiles.id, userObj.userId));
+          } catch (e) {}
+        }
+        return true;
+      }
+      return false;
+    }
+    return verifyUserPassword(password, currentHash);
+  }
+
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { role, username, password, phoneOrEmail } = req.body;
@@ -1114,7 +1133,8 @@ async function startServer() {
               name: guardianProfiles.fullName,
               phone: guardianProfiles.phone,
               email: profiles.email,
-              location: guardianProfiles.address
+              location: guardianProfiles.address,
+              passwordHash: profiles.passwordHash
             })
             .from(guardianProfiles)
             .leftJoin(profiles, eq(guardianProfiles.userId, profiles.id))
@@ -1133,27 +1153,111 @@ async function startServer() {
                 fullName: dbGuardians[0].name || 'Guardian',
                 phone: dbGuardians[0].phone || cleanIdentifier,
                 email: dbGuardians[0].email || `${cleanIdentifier}@tutorlink.com`,
-                location: dbGuardians[0].location || 'Dhaka'
+                location: dbGuardians[0].location || 'Dhaka',
+                passwordHash: dbGuardians[0].passwordHash
               };
             }
           } catch (dbE) {}
         }
 
-        // 3. If account does NOT exist, enforce sign-up requirement
+        // 3. Fallback: Check if account exists as Tutor
         if (!matchedGuardian) {
-          return res.status(404).json({
-            notFound: true,
-            error: `No guardian account found with "${cleanIdentifier}". Please click "Create a free account now" below to register.`
-          });
+          let matchedTutorFallback = mockTutors.find((t: any) => 
+            (t.phone && t.phone === cleanIdentifier) || 
+            (t.email && t.email.toLowerCase() === cleanIdentifier.toLowerCase()) || 
+            (t.tutorCode && t.tutorCode.toLowerCase() === cleanIdentifier.toLowerCase()) ||
+            (t.id && t.id.toLowerCase() === cleanIdentifier.toLowerCase())
+          );
+
+          if (!matchedTutorFallback) {
+            try {
+              const dbTutors = await db.select({
+                id: tutorProfiles.id,
+                userId: tutorProfiles.userId,
+                tutorCode: tutorProfiles.tutorCode,
+                fullName: tutorProfiles.fullName,
+                phone: profiles.phone,
+                email: profiles.email,
+                university: tutorProfiles.university,
+                department: tutorProfiles.department,
+                passwordHash: profiles.passwordHash
+              })
+              .from(tutorProfiles)
+              .leftJoin(profiles, eq(tutorProfiles.userId, profiles.id))
+              .where(or(
+                eq(tutorProfiles.tutorCode, cleanIdentifier),
+                sql`${tutorProfiles.tutorCode} ILIKE ${cleanIdentifier}`,
+                eq(profiles.phone, cleanIdentifier),
+                eq(profiles.email, cleanIdentifier)
+              ))
+              .limit(1);
+
+              if (dbTutors.length > 0) {
+                matchedTutorFallback = {
+                  id: dbTutors[0].tutorCode || dbTutors[0].id,
+                  tutorCode: dbTutors[0].tutorCode,
+                  userId: dbTutors[0].userId,
+                  fullName: dbTutors[0].fullName,
+                  phone: dbTutors[0].phone || cleanIdentifier,
+                  email: dbTutors[0].email || `${cleanIdentifier}@tutorlink.com`,
+                  university: dbTutors[0].university || 'University Student',
+                  department: dbTutors[0].department || 'General',
+                  passwordHash: dbTutors[0].passwordHash
+                };
+              }
+            } catch (dbE) {}
+          }
+
+          if (matchedTutorFallback) {
+            // Validate Password for Tutor account
+            const isValid = await validateAndUpgradePassword(password, matchedTutorFallback);
+            if (!isValid) {
+              return res.status(401).json({
+                passwordIncorrect: true,
+                error: 'Password incorrect. Please check your password and try again.'
+              });
+            }
+
+            matchedTutorObj = matchedTutorFallback;
+            userProfile = { 
+              id: matchedTutorFallback.userId || matchedTutorFallback.id, 
+              name: matchedTutorFallback.fullName || matchedTutorFallback.name || cleanIdentifier, 
+              role: 'tutor',
+              tutorCode: matchedTutorFallback.tutorCode,
+              phone: matchedTutorFallback.phone || cleanIdentifier,
+              email: matchedTutorFallback.email || (cleanIdentifier.includes('@') ? cleanIdentifier : `${cleanIdentifier}@tutorlink.com`),
+              university: matchedTutorFallback.university || 'University Student',
+              department: matchedTutorFallback.department || 'General'
+            };
+          }
         }
 
-        userProfile = {
-          id: matchedGuardian.userId || matchedGuardian.id,
-          name: matchedGuardian.fullName || matchedGuardian.name || cleanIdentifier,
-          role: 'parent',
-          phone: matchedGuardian.phone || cleanIdentifier,
-          email: matchedGuardian.email || `${cleanIdentifier}@tutorlink.com`
-        };
+        // 4. If account does NOT exist in either role, enforce sign-up
+        if (!userProfile) {
+          if (!matchedGuardian) {
+            return res.status(404).json({
+              notFound: true,
+              error: `No guardian account found with "${cleanIdentifier}". Please click "Create a free account now" below to register.`
+            });
+          }
+
+          // Validate Password
+          const isValid = await validateAndUpgradePassword(password, matchedGuardian);
+          if (!isValid) {
+            return res.status(401).json({
+              passwordIncorrect: true,
+              error: 'Password incorrect. Please check your password and try again.'
+            });
+          }
+
+          userProfile = {
+            id: matchedGuardian.userId || matchedGuardian.id,
+            name: matchedGuardian.fullName || matchedGuardian.name || cleanIdentifier,
+            role: 'parent',
+            phone: matchedGuardian.phone || cleanIdentifier,
+            email: matchedGuardian.email || `${cleanIdentifier}@tutorlink.com`
+          };
+        }
 
       } else {
         // Tutor Login
@@ -1180,7 +1284,8 @@ async function startServer() {
               phone: profiles.phone,
               email: profiles.email,
               university: tutorProfiles.university,
-              department: tutorProfiles.department
+              department: tutorProfiles.department,
+              passwordHash: profiles.passwordHash
             })
             .from(tutorProfiles)
             .leftJoin(profiles, eq(tutorProfiles.userId, profiles.id))
@@ -1201,31 +1306,104 @@ async function startServer() {
                 phone: dbTutors[0].phone || cleanIdentifier,
                 email: dbTutors[0].email || `${cleanIdentifier}@tutorlink.com`,
                 university: dbTutors[0].university || 'University Student',
-                department: dbTutors[0].department || 'General'
+                department: dbTutors[0].department || 'General',
+                passwordHash: dbTutors[0].passwordHash
               };
             }
           } catch (dbE) {}
         }
 
-        // 3. If account does NOT exist, enforce sign-up requirement
+        // 3. Fallback: Check if account exists as Guardian
         if (!matchedTutor) {
-          return res.status(404).json({
-            notFound: true,
-            error: `No tutor account found with "${cleanIdentifier}". Please click "Create a free account now" below to register as a tutor.`
-          });
+          let matchedGuardianFallback = mockGuardians.find((g: any) => 
+            (g.phone && g.phone === cleanIdentifier) || 
+            (g.email && g.email.toLowerCase() === cleanIdentifier.toLowerCase())
+          );
+
+          if (!matchedGuardianFallback) {
+            try {
+              const dbGuardians = await db.select({
+                id: guardianProfiles.id,
+                userId: guardianProfiles.userId,
+                name: guardianProfiles.fullName,
+                phone: guardianProfiles.phone,
+                email: profiles.email,
+                location: guardianProfiles.address,
+                passwordHash: profiles.passwordHash
+              })
+              .from(guardianProfiles)
+              .leftJoin(profiles, eq(guardianProfiles.userId, profiles.id))
+              .where(or(
+                eq(guardianProfiles.phone, cleanIdentifier),
+                sql`${guardianProfiles.phone} = ${cleanIdentifier}`,
+                eq(profiles.email, cleanIdentifier),
+                eq(profiles.phone, cleanIdentifier)
+              ))
+              .limit(1);
+
+              if (dbGuardians.length > 0) {
+                matchedGuardianFallback = {
+                  id: dbGuardians[0].id,
+                  userId: dbGuardians[0].userId,
+                  fullName: dbGuardians[0].name || 'Guardian',
+                  phone: dbGuardians[0].phone || cleanIdentifier,
+                  email: dbGuardians[0].email || `${cleanIdentifier}@tutorlink.com`,
+                  location: dbGuardians[0].location || 'Dhaka',
+                  passwordHash: dbGuardians[0].passwordHash
+                };
+              }
+            } catch (dbE) {}
+          }
+
+          if (matchedGuardianFallback) {
+            const isValid = await validateAndUpgradePassword(password, matchedGuardianFallback);
+            if (!isValid) {
+              return res.status(401).json({
+                passwordIncorrect: true,
+                error: 'Password incorrect. Please check your password and try again.'
+              });
+            }
+
+            userProfile = {
+              id: matchedGuardianFallback.userId || matchedGuardianFallback.id,
+              name: matchedGuardianFallback.fullName || matchedGuardianFallback.name || cleanIdentifier,
+              role: 'parent',
+              phone: matchedGuardianFallback.phone || cleanIdentifier,
+              email: matchedGuardianFallback.email || `${cleanIdentifier}@tutorlink.com`
+            };
+          }
         }
 
-        matchedTutorObj = matchedTutor;
-        userProfile = { 
-          id: matchedTutor.userId || matchedTutor.id, 
-          name: matchedTutor.fullName || matchedTutor.name || cleanIdentifier, 
-          role: 'tutor',
-          tutorCode: matchedTutor.tutorCode,
-          phone: matchedTutor.phone || cleanIdentifier,
-          email: matchedTutor.email || (cleanIdentifier.includes('@') ? cleanIdentifier : `${cleanIdentifier}@tutorlink.com`),
-          university: matchedTutor.university || 'University Student',
-          department: matchedTutor.department || 'General'
-        };
+        // 4. If account does NOT exist in either role, enforce sign-up
+        if (!userProfile) {
+          if (!matchedTutor) {
+            return res.status(404).json({
+              notFound: true,
+              error: `No tutor account found with "${cleanIdentifier}". Please click "Create a free account now" below to register as a tutor.`
+            });
+          }
+
+          // Validate Password
+          const isValid = await validateAndUpgradePassword(password, matchedTutor);
+          if (!isValid) {
+            return res.status(401).json({
+              passwordIncorrect: true,
+              error: 'Password incorrect. Please check your password and try again.'
+            });
+          }
+
+          matchedTutorObj = matchedTutor;
+          userProfile = { 
+            id: matchedTutor.userId || matchedTutor.id, 
+            name: matchedTutor.fullName || matchedTutor.name || cleanIdentifier, 
+            role: 'tutor',
+            tutorCode: matchedTutor.tutorCode,
+            phone: matchedTutor.phone || cleanIdentifier,
+            email: matchedTutor.email || (cleanIdentifier.includes('@') ? cleanIdentifier : `${cleanIdentifier}@tutorlink.com`),
+            university: matchedTutor.university || 'University Student',
+            department: matchedTutor.department || 'General'
+          };
+        }
       }
       
       const token = generateToken(userProfile);
@@ -1252,6 +1430,7 @@ async function startServer() {
       const { role, fullName, phoneOrEmail, password, university, department, gender, district, area, tutoringExperience } = req.body;
       const cleanIdentifier = (phoneOrEmail || '').toString().trim();
       const cleanName = (fullName || '').toString().trim();
+      const cleanPassword = (password || '').toString();
 
       if (!cleanIdentifier) {
         return res.status(400).json({ error: 'Phone number or email is required.' });
@@ -1259,38 +1438,82 @@ async function startServer() {
       if (!cleanName) {
         return res.status(400).json({ error: 'Full name is required.' });
       }
-
-      // 1. Check if user already exists (duplicate check)
-      const existingTutor = mockTutors.find((t: any) => 
-        (t.phone && t.phone === cleanIdentifier) || 
-        (t.email && t.email.toLowerCase() === cleanIdentifier.toLowerCase())
-      );
-      const existingGuardian = mockGuardians.find((g: any) => 
-        (g.phone && g.phone === cleanIdentifier) || 
-        (g.email && g.email.toLowerCase() === cleanIdentifier.toLowerCase())
-      );
-
-      if (existingTutor || existingGuardian) {
-        return res.status(409).json({
-          alreadyExists: true,
-          error: `An account with "${cleanIdentifier}" already exists. Please sign in instead.`
-        });
+      if (!cleanPassword || cleanPassword.length < 4) {
+        return res.status(400).json({ error: 'Password must be at least 4 characters long.' });
       }
 
-      // Check database for existing profile
-      try {
-        const existingDb = await db.select({ id: profiles.id })
-          .from(profiles)
-          .where(or(eq(profiles.phone, cleanIdentifier), eq(profiles.email, cleanIdentifier)))
-          .limit(1);
+      const hashedPassword = hashPassword(cleanPassword);
 
-        if (existingDb.length > 0) {
+      // 1. Role-specific duplicate check
+      if (role === 'tutor') {
+        const existingTutor = mockTutors.find((t: any) => 
+          (t.phone && t.phone === cleanIdentifier) || 
+          (t.email && t.email.toLowerCase() === cleanIdentifier.toLowerCase())
+        );
+        if (existingTutor) {
           return res.status(409).json({
             alreadyExists: true,
-            error: `An account with "${cleanIdentifier}" already exists in our database. Please sign in instead.`
+            error: `A tutor account with "${cleanIdentifier}" already exists. Please sign in instead.`
           });
         }
-      } catch (dbE) {}
+
+        try {
+          const existingTutorDb = await db.select({
+            id: tutorProfiles.id,
+            userId: tutorProfiles.userId,
+            passwordHash: profiles.passwordHash
+          })
+            .from(tutorProfiles)
+            .leftJoin(profiles, eq(tutorProfiles.userId, profiles.id))
+            .where(or(
+              eq(tutorProfiles.tutorCode, cleanIdentifier),
+              eq(profiles.phone, cleanIdentifier),
+              eq(profiles.email, cleanIdentifier)
+            ))
+            .limit(1);
+
+          if (existingTutorDb.length > 0 && existingTutorDb[0].passwordHash) {
+            return res.status(409).json({
+              alreadyExists: true,
+              error: `A tutor account with "${cleanIdentifier}" already exists in our database. Please sign in instead.`
+            });
+          }
+        } catch (dbE) {}
+      } else {
+        const existingGuardian = mockGuardians.find((g: any) => 
+          (g.phone && g.phone === cleanIdentifier) || 
+          (g.email && g.email.toLowerCase() === cleanIdentifier.toLowerCase())
+        );
+        if (existingGuardian && (existingGuardian.passwordHash || existingGuardian.password)) {
+          return res.status(409).json({
+            alreadyExists: true,
+            error: `A guardian account with "${cleanIdentifier}" already exists. Please sign in instead.`
+          });
+        }
+
+        try {
+          const existingGuardianDb = await db.select({
+            id: guardianProfiles.id,
+            userId: guardianProfiles.userId,
+            passwordHash: profiles.passwordHash
+          })
+            .from(guardianProfiles)
+            .leftJoin(profiles, eq(guardianProfiles.userId, profiles.id))
+            .where(or(
+              eq(guardianProfiles.phone, cleanIdentifier),
+              eq(profiles.phone, cleanIdentifier),
+              eq(profiles.email, cleanIdentifier)
+            ))
+            .limit(1);
+
+          if (existingGuardianDb.length > 0 && existingGuardianDb[0].passwordHash) {
+            return res.status(409).json({
+              alreadyExists: true,
+              error: `A guardian account with "${cleanIdentifier}" already exists in our database. Please sign in instead.`
+            });
+          }
+        } catch (dbE) {}
+      }
 
       // 2. Build User Profile
       const userId = 'usr-' + Date.now();
@@ -1317,6 +1540,8 @@ async function startServer() {
           name: cleanName,
           phone: cleanIdentifier,
           email: userProfile.email,
+          password: hashedPassword,
+          passwordHash: hashedPassword,
           university: university || 'Dhaka University',
           department: department || 'General',
           gender: gender || 'Male',
@@ -1358,12 +1583,29 @@ async function startServer() {
 
         // Save in database
         try {
-          const [prof] = await db.insert(profiles).values({
-            fullName: userProfile.name,
-            phone: userProfile.phone,
-            email: userProfile.email,
-            accountStatus: 'active'
-          }).returning();
+          const existingProfiles = await db.select()
+            .from(profiles)
+            .where(or(eq(profiles.phone, cleanIdentifier), eq(profiles.email, cleanIdentifier)))
+            .limit(1);
+
+          let prof: any = null;
+          if (existingProfiles.length > 0) {
+            await db.update(profiles).set({
+              fullName: userProfile.name,
+              passwordHash: hashedPassword,
+              accountStatus: 'active'
+            }).where(eq(profiles.id, existingProfiles[0].id));
+            prof = existingProfiles[0];
+          } else {
+            const [newProf] = await db.insert(profiles).values({
+              fullName: userProfile.name,
+              phone: userProfile.phone,
+              email: userProfile.email,
+              passwordHash: hashedPassword,
+              accountStatus: 'active'
+            }).returning();
+            prof = newProf;
+          }
 
           if (prof) {
             await db.insert(tutorProfiles).values({
@@ -1394,6 +1636,8 @@ async function startServer() {
           name: cleanName,
           phone: cleanIdentifier,
           email: userProfile.email,
+          password: hashedPassword,
+          passwordHash: hashedPassword,
           location: `${area || 'Dhaka'}, Bangladesh`,
           status: 'Active',
           totalTuitions: 0,
@@ -1403,12 +1647,29 @@ async function startServer() {
 
         // Save in database
         try {
-          const [prof] = await db.insert(profiles).values({
-            fullName: userProfile.name,
-            phone: userProfile.phone,
-            email: userProfile.email,
-            accountStatus: 'active'
-          }).returning();
+          const existingProfiles = await db.select()
+            .from(profiles)
+            .where(or(eq(profiles.phone, cleanIdentifier), eq(profiles.email, cleanIdentifier)))
+            .limit(1);
+
+          let prof: any = null;
+          if (existingProfiles.length > 0) {
+            await db.update(profiles).set({
+              fullName: userProfile.name,
+              passwordHash: hashedPassword,
+              accountStatus: 'active'
+            }).where(eq(profiles.id, existingProfiles[0].id));
+            prof = existingProfiles[0];
+          } else {
+            const [newProf] = await db.insert(profiles).values({
+              fullName: userProfile.name,
+              phone: userProfile.phone,
+              email: userProfile.email,
+              passwordHash: hashedPassword,
+              accountStatus: 'active'
+            }).returning();
+            prof = newProf;
+          }
 
           if (prof) {
             await db.insert(guardianProfiles).values({

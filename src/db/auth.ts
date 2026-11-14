@@ -1,12 +1,43 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'tutorlink-secret-key-for-jwt-2026';
 if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'tutorlink-secret-key-for-jwt-2026')) {
   console.warn('⚠️ WARNING: Using fallback JWT_SECRET in production. Set a unique JWT_SECRET in .env for security.');
 }
+
+export const hashPassword = (password: string): string => {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+};
+
+export const verifyPassword = (password: string, storedHash?: string): boolean => {
+  if (!storedHash || !password) return false;
+  if (!storedHash.includes(':')) {
+    return password === storedHash;
+  }
+  try {
+    const [salt, key] = storedHash.split(':');
+    const keyBuffer = Buffer.from(key, 'hex');
+    const derivedKey = crypto.scryptSync(password, salt, keyBuffer.length);
+    return crypto.timingSafeEqual(keyBuffer, derivedKey);
+  } catch {
+    return false;
+  }
+};
+
+export const verifyUserPassword = (inputPassword: string, storedHashOrPassword?: string): boolean => {
+  if (!inputPassword) return false;
+  if (storedHashOrPassword) {
+    return verifyPassword(inputPassword, storedHashOrPassword);
+  }
+  // Fallback for default seed / mock entries with no stored password
+  return inputPassword === 'password123' || inputPassword === '123456';
+};
 
 export const generateToken = (payload: any) => {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });

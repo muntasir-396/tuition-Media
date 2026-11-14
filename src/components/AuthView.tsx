@@ -77,7 +77,9 @@ export const AuthView: React.FC = () => {
       const data = await res.json();
       
       if (res.ok && data.success) {
-        setUserRole(activeRole);
+        const effectiveRole = data.user?.role || activeRole;
+        setUserRole(effectiveRole);
+        setActiveRole(effectiveRole);
         setIsLoggedIn(true);
         
         if (data.user) {
@@ -94,16 +96,16 @@ export const AuthView: React.FC = () => {
 
         setSubmittedMessage(
           isSignUpMode
-            ? `Account successfully created as ${activeRole.toUpperCase()}!`
-            : `Signed in successfully as ${activeRole.toUpperCase()}!`
+            ? `Account successfully created as ${effectiveRole.toUpperCase()}!`
+            : `Signed in successfully as ${effectiveRole.toUpperCase()}!`
         );
 
-        if (activeRole === 'tutor') {
+        if (effectiveRole === 'tutor') {
           await refreshMyTutorProfile();
         }
     
         setTimeout(() => {
-          setActiveTab(activeRole === 'tutor' ? 'profile' : 'guardian-dashboard');
+          setActiveTab(effectiveRole === 'tutor' ? 'profile' : 'guardian-dashboard');
         }, 800);
       } else {
         if (data.notFound) {
@@ -159,7 +161,10 @@ export const AuthView: React.FC = () => {
         <div className="p-1 bg-slate-100 rounded-2xl grid grid-cols-2 text-xs font-extrabold text-slate-700">
           <button
             type="button"
-            onClick={() => setActiveRole('parent')}
+            onClick={() => {
+              setActiveRole('parent');
+              setInfoBanner(null);
+            }}
             className={`py-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 ${
               activeRole === 'parent'
                 ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
@@ -172,7 +177,10 @@ export const AuthView: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => setActiveRole('tutor')}
+            onClick={() => {
+              setActiveRole('tutor');
+              setInfoBanner(null);
+            }}
             className={`py-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 ${
               activeRole === 'tutor'
                 ? 'bg-[#84CC16] text-slate-950 shadow-sm font-black'
@@ -217,7 +225,13 @@ export const AuthView: React.FC = () => {
             </div>
             <div className="flex-1 space-y-1">
               <span className="font-bold block text-sm">
-                {infoBanner.type === 'warning' ? 'No Account Found' : infoBanner.type === 'error' ? 'Authentication Notice' : 'Notice'}
+                {infoBanner.type === 'warning'
+                  ? 'No Account Found'
+                  : infoBanner.text?.toLowerCase().includes('password')
+                  ? 'Password Incorrect'
+                  : infoBanner.type === 'error'
+                  ? 'Authentication Notice'
+                  : 'Notice'}
               </span>
               <p className="font-medium leading-relaxed">{infoBanner.text}</p>
             </div>
@@ -455,6 +469,7 @@ export const AuthView: React.FC = () => {
         <button
           onClick={() => {
             setIsSignUpMode(!isSignUpMode);
+            setInfoBanner(null);
             setSubmittedMessage('');
           }}
           className="mt-1 text-sm font-bold text-[#84CC16] hover:text-[#65A30D] transition-colors cursor-pointer inline-block border-b-2 border-transparent hover:border-[#84CC16]"
